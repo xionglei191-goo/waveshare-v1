@@ -11,9 +11,13 @@
 #include "app_sync_queue.h"
 #include "assets/lang_config.h"
 #include "board.h"
+#include "wifi_board.h"
 #include "display.h"
 #include "settings.h"
 #include "system_info.h"
+
+#include <ssid_manager.h>
+#include <wifi_manager.h>
 
 #include <cJSON.h>
 #include <esp_app_desc.h>
@@ -157,6 +161,14 @@ void ShowSettingsPowerAction() { AppShell::GetInstance().ShowSettingsPower(); }
 void ShowSettingsStorageAction() { AppShell::GetInstance().ShowSettingsStorage(); }
 void ShowSettingsSystemAction() { AppShell::GetInstance().ShowSettingsSystem(); }
 void ShowSettingsDiagnosticsAction() { AppShell::GetInstance().ShowSettingsDiagnostics(); }
+void ShowSettingsWifiAction() { AppShell::GetInstance().ShowSettingsWifi(); }
+void SelectWifi0Action() { AppShell::GetInstance().SelectWifiByIndex(0); }
+void SelectWifi1Action() { AppShell::GetInstance().SelectWifiByIndex(1); }
+void SelectWifi2Action() { AppShell::GetInstance().SelectWifiByIndex(2); }
+void SelectWifi3Action() { AppShell::GetInstance().SelectWifiByIndex(3); }
+void ForgetWifiAction() { AppShell::GetInstance().ForgetWifiByIndex(-1); }
+void EnterWifiProvisioningAction() { AppShell::GetInstance().EnterWifiProvisioning(); }
+void SelectWifiSwitchAction() { AppShell::GetInstance().SwitchToSelectedWifi(); }
 void ShowMiniGameAction() { AppShell::GetInstance().ShowMiniGame(); }
 void ToggleAiAction() { AppShell::GetInstance().ToggleAiListening(); }
 void MusicSdPlayPauseAction() { AppShell::GetInstance().RunBackendAction("music.sd.play_pause"); }
@@ -204,6 +216,14 @@ void OnShowSettingsPower(lv_event_t*) { Schedule(ShowSettingsPowerAction); }
 void OnShowSettingsStorage(lv_event_t*) { Schedule(ShowSettingsStorageAction); }
 void OnShowSettingsSystem(lv_event_t*) { Schedule(ShowSettingsSystemAction); }
 void OnShowSettingsDiagnostics(lv_event_t*) { Schedule(ShowSettingsDiagnosticsAction); }
+void OnShowSettingsWifi(lv_event_t*) { Schedule(ShowSettingsWifiAction); }
+void OnSelectWifi0(lv_event_t*) { Schedule(SelectWifi0Action); }
+void OnSelectWifi1(lv_event_t*) { Schedule(SelectWifi1Action); }
+void OnSelectWifi2(lv_event_t*) { Schedule(SelectWifi2Action); }
+void OnSelectWifi3(lv_event_t*) { Schedule(SelectWifi3Action); }
+void OnForgetWifi(lv_event_t*) { Schedule(ForgetWifiAction); }
+void OnEnterWifiProvisioning(lv_event_t*) { Schedule(EnterWifiProvisioningAction); }
+void OnSelectWifiSwitch(lv_event_t*) { Schedule(SelectWifiSwitchAction); }
 void OnShowMiniGame(lv_event_t*) { Schedule(ShowMiniGameAction); }
 void OnToggleAi(lv_event_t*) { Schedule(ToggleAiAction); }
 void OnMusicSdPlayPause(lv_event_t*) { Schedule(MusicSdPlayPauseAction); }
@@ -815,6 +835,7 @@ std::string BatteryHealthLine(const BatteryInfo& info) {
         case Page::kSettingsStorage:      return "settings";
         case Page::kSettingsSystem:       return "settings";
         case Page::kSettingsDiagnostics:  return "settings";
+        case Page::kSettingsWifi:         return "settings";
         case Page::kApps:                 return "apps";
         case Page::kHome:                 return "home";
         case Page::kWeather:              return "weather";
@@ -908,6 +929,10 @@ void AppShell::ShowSettingsPower() { SetPage(Page::kSettingsPower); }
 void AppShell::ShowSettingsStorage() { SetPage(Page::kSettingsStorage); }
 void AppShell::ShowSettingsSystem() { SetPage(Page::kSettingsSystem); }
 void AppShell::ShowSettingsDiagnostics() { SetPage(Page::kSettingsDiagnostics); }
+void AppShell::ShowSettingsWifi() {
+    wifi_action_hint_.clear();  // Fresh entry: start with the network-count header.
+    SetPage(Page::kSettingsWifi);
+}
 void AppShell::ShowFamilyMode() { SetPage(Page::kFamilyMode); }
 void AppShell::ShowMiniGame() { SetPage(Page::kMiniGame); }
 void AppShell::ShowPomodoro() { SetPage(Page::kPomodoro); }
@@ -1422,6 +1447,7 @@ void AppShell::Render() {
         case Page::kSettingsStorage: RenderSettingsStorage(); break;
         case Page::kSettingsSystem: RenderSettingsSystem(); break;
         case Page::kSettingsDiagnostics: RenderSettingsDiagnostics(); break;
+        case Page::kSettingsWifi: RenderSettingsWifi(); break;
         case Page::kFamilyMode: RenderFamilyMode(); break;
         case Page::kMiniGame: RenderMiniGame(); break;
         case Page::kPomodoro: RenderPomodoro(); break;
@@ -1943,8 +1969,171 @@ void AppShell::RenderSettingsConnectivity() {
                             usb_state == "可用" ? kAccentBlue : kMutedText);
     CreateSettingsDetailRow(card, "蜂窝", cell_state.c_str(), 168,
                             cell_state == "可用" ? kAccentBlue : kMutedText);
-    CreateButton(content_, "刷新", -54, kSafeActionTop, 92, kSafeActionHeight, OnRefreshBackend, backend_.online);
+    CreateButton(content_, "WiFi", -54, kSafeActionTop, 92, kSafeActionHeight, OnShowSettingsWifi, true);
     CreateButton(content_, "返回", 54, kSafeActionTop, 92, kSafeActionHeight, OnShowSettings);
+}
+
+void AppShell::RenderSettingsWifi() {
+    const auto& ssid_list = SsidManager::GetInstance().GetSsidList();
+    const int count = static_cast<int>(ssid_list.size());
+    if (wifi_selected_index_ >= count) {
+        wifi_selected_index_ = count > 0 ? count - 1 : 0;
+    }
+    if (wifi_selected_index_ < 0) {
+        wifi_selected_index_ = 0;
+    }
+
+    const std::string current_ssid = WifiManager::GetInstance().GetSsid();
+    const bool online = WifiManager::GetInstance().IsConnected();
+
+    // Header line doubles as the action-feedback line: after 切换/删除/手机添加
+    // it shows the transient status (warm color) so the tap has visible effect;
+    // otherwise it shows the saved-network count. Cleared on page (re)entry.
+    std::string header;
+    uint32_t header_color;
+    if (!wifi_action_hint_.empty()) {
+        header = wifi_action_hint_;
+        header_color = kWarm;
+    } else {
+        header = count > 0 ? ("已存 " + std::to_string(count) + " 个网络") : "暂无已存网络";
+        header_color = online ? kAccent : kAccentBlue;
+    }
+    CreateLabel(content_, header.c_str(), 0, 2, 260, header_color, LV_TEXT_ALIGN_CENTER);
+
+    if (count == 0) {
+        auto card = CreatePanel(content_, 0, 30, 276, 92, kPanelBg, kWarm, 16);
+        CreateLabelBox(card, "还没有保存任何 Wi-Fi。用手机连接设备热点完成配网后，密码会自动记住。", 0, 12, 244,
+                       64, kMutedText, LV_TEXT_ALIGN_CENTER, LV_LABEL_LONG_WRAP);
+    } else {
+        // Up to 4 saved networks as tappable rows. SsidManager keeps the list in
+        // insertion/priority order (front = default), NOT by signal strength.
+        // RSSI ranking happens later in WifiStation::HandleScanResult at scan
+        // time. Tapping selects; 切换 moves the selection to the front and
+        // restarts the station, so WifiStation rescans and connects to the
+        // strongest saved network currently in range.
+        const int visible = count < 4 ? count : 4;
+        const int row_height = 34;
+        const lv_event_cb_t row_cbs[4] = {OnSelectWifi0, OnSelectWifi1, OnSelectWifi2, OnSelectWifi3};
+        for (int i = 0; i < visible; i++) {
+            const int y = 30 + i * (row_height + 4);
+            const bool selected = i == wifi_selected_index_;
+            const bool active_link = online && ssid_list[i].ssid == current_ssid;
+            auto row = CreatePanel(content_, 0, y, 276, row_height,
+                                   selected ? kPanelActiveBg : kPanelBg,
+                                   active_link ? kAccent : (selected ? kAccentBlue : kBorder), row_height / 2);
+            lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_add_event_cb(row, row_cbs[i], LV_EVENT_CLICKED, nullptr);
+
+            std::string name = ssid_list[i].ssid.empty() ? "(未命名)" : ssid_list[i].ssid;
+            CreateLabel(row, name.c_str(), -20, 8, 176, active_link ? kAccent : kText, LV_TEXT_ALIGN_LEFT);
+            const char* tag = active_link ? "在线" : (i == 0 ? "默认" : "已存");
+            CreateLabel(row, tag, 84, 8, 60, active_link ? kAccent : kMutedText, LV_TEXT_ALIGN_RIGHT);
+        }
+    }
+
+    const bool has_sel = count > 0;
+    CreateButton(content_, "切换", -84, kSafeActionTop, 74, kSafeActionHeight, OnSelectWifiSwitch, has_sel);
+    CreateButton(content_, "删除", -4, kSafeActionTop, 74, kSafeActionHeight, OnForgetWifi, has_sel);
+    CreateButton(content_, "手机添加", 78, kSafeActionTop, 82, kSafeActionHeight, OnEnterWifiProvisioning);
+    CreateButton(content_, "返回", 0, kSafeActionTop + kSafeActionHeight + 6, 104, kSafeActionHeight,
+                 OnShowSettingsConnectivity);
+}
+
+void AppShell::SelectWifiByIndex(int index) {
+    const int count = static_cast<int>(SsidManager::GetInstance().GetSsidList().size());
+    if (index < 0 || index >= count) {
+        return;
+    }
+    wifi_selected_index_ = index;
+    // Runs on the main task via Schedule(); the LVGL render task touches the
+    // same widgets, so every RenderOrDefer() must hold the display lock (matches
+    // OnAiStateChanged and friends). Without it LVGL's area list corrupts and
+    // lv_inv_area spins forever, starving IDLE and tripping the task watchdog.
+    DisplayLockGuard lock(display_);
+    RenderOrDefer();
+}
+
+void AppShell::ForgetWifiByIndex(int index) {
+    auto& manager = SsidManager::GetInstance();
+    const int count = static_cast<int>(manager.GetSsidList().size());
+    const int target = index >= 0 ? index : wifi_selected_index_;
+    if (target < 0 || target >= count) {
+        return;
+    }
+    const std::string removed = manager.GetSsidList()[target].ssid;
+    manager.RemoveSsid(target);
+    if (wifi_selected_index_ >= target && wifi_selected_index_ > 0) {
+        wifi_selected_index_--;
+    }
+    wifi_action_hint_ = removed.empty() ? "已删除网络" : ("已删除 " + removed);
+    last_backend_action_status_ = "已删除 Wi-Fi";
+    RenderOrDefer();
+}
+
+void AppShell::EnterWifiProvisioning() {
+    // Hand off to the board's WiFi config mode (this board uses the SoftAP
+    // hotspot portal, per CONFIG_USE_HOTSPOT_WIFI_PROVISIONING) so a phone can
+    // push new credentials. WifiBoard::EnterWifiConfigMode is thread-safe and
+    // tears down the current station; SsidManager persists the new SSID on
+    // success.
+    //
+    // EnterWifiConfigMode only actually switches when the device is in one of
+    // these states (see wifi_board.cc); any other state is a silent no-op there,
+    // so mirror the same check to give an honest on-screen hint instead of
+    // claiming success when nothing happened.
+    const DeviceState state = Application::GetInstance().GetDeviceState();
+    const bool can_enter = state == kDeviceStateIdle || state == kDeviceStateSpeaking ||
+                           state == kDeviceStateListening || state == kDeviceStateStarting;
+    if (!can_enter) {
+        wifi_action_hint_ = "设备忙，请稍后再试";
+        DisplayLockGuard lock(display_);
+        RenderOrDefer();
+        return;
+    }
+
+    auto* wifi_board = static_cast<WifiBoard*>(&Board::GetInstance());
+    if (wifi_board == nullptr) {
+        wifi_action_hint_ = "此设备不支持配网";
+        DisplayLockGuard lock(display_);
+        RenderOrDefer();
+        return;
+    }
+
+    wifi_action_hint_ = "配网已开启，用手机连接设备热点";
+    last_backend_action_status_ = "进入配网模式";
+    {
+        DisplayLockGuard lock(display_);
+        RenderOrDefer();
+    }
+    // Board work (ShowNotification + station teardown) takes its own display
+    // lock as needed; call it after releasing ours so the render above is fully
+    // committed first.
+    wifi_board->EnterWifiConfigMode();
+}
+
+void AppShell::SwitchToSelectedWifi() {
+    // Move the selected network to the front (new default), then restart the
+    // station. WifiStation rescans and connects to the strongest matching
+    // saved candidate, so this both re-prioritizes and forces a reconnect.
+    auto& manager = SsidManager::GetInstance();
+    const int count = static_cast<int>(manager.GetSsidList().size());
+    if (wifi_selected_index_ < 0 || wifi_selected_index_ >= count) {
+        return;
+    }
+    const std::string target = manager.GetSsidList()[wifi_selected_index_].ssid;
+    manager.SetDefaultSsid(wifi_selected_index_);
+    wifi_selected_index_ = 0;
+
+    auto& wifi = WifiManager::GetInstance();
+    if (wifi.IsInitialized()) {
+        wifi.StopStation();
+        wifi.StartStation();
+    }
+    wifi_action_hint_ = target.empty() ? "正在切换网络…" : ("正在连接 " + target + " …");
+    last_backend_action_status_ = "切换 Wi-Fi 中";
+    AppConnectivityManager::GetInstance().Refresh();
+    DisplayLockGuard lock(display_);
+    RenderOrDefer();
 }
 
 void AppShell::RenderSettingsPower() {
@@ -2174,7 +2363,8 @@ const char* AppShell::AiButtonText() const {
         case Page::kSettingsPower:
         case Page::kSettingsStorage:
         case Page::kSettingsSystem:
-        case Page::kSettingsDiagnostics: return "问设置";
+        case Page::kSettingsDiagnostics:
+        case Page::kSettingsWifi: return "问设置";
         case Page::kHome:
         case Page::kScreensaver:
         case Page::kNotifications:
@@ -2258,6 +2448,7 @@ const char* AppShell::PageTitle() const {
         case Page::kSettingsStorage: return "存储";
         case Page::kSettingsSystem: return "系统";
         case Page::kSettingsDiagnostics: return "诊断";
+        case Page::kSettingsWifi: return "WiFi";
         case Page::kFamilyMode: return "模式";
         case Page::kMiniGame: return "游戏";
         case Page::kPomodoro: return "番茄钟";

@@ -29,6 +29,7 @@ public:
         kSettings,
         kSettingsNetwork,
         kSettingsConnectivity,
+        kSettingsWifi,
         kSettingsPower,
         kSettingsStorage,
         kSettingsSystem,
@@ -63,6 +64,7 @@ public:
     void ShowSettings();
     void ShowSettingsNetwork();
     void ShowSettingsConnectivity();
+    void ShowSettingsWifi();
     void ShowSettingsPower();
     void ShowSettingsStorage();
     void ShowSettingsSystem();
@@ -86,6 +88,15 @@ public:
     void ResetMiniGame();
     void TogglePomodoro();
     void ResetPomodoro();
+
+    // Wi-Fi credential management. The device stores up to 10 SSID/password
+    // pairs in NVS (SsidManager) and auto-connects the strongest saved network
+    // on scan. These actions let the round screen switch the preferred network,
+    // forget a saved one, and jump to phone BluFi provisioning for a new one.
+    void SelectWifiByIndex(int index);
+    void SwitchToSelectedWifi();
+    void ForgetWifiByIndex(int index);
+    void EnterWifiProvisioning();
 
     void Tick();
     void OnAiStateChanged(DeviceState state);
@@ -123,6 +134,7 @@ private:
     void RenderSettings();
     void RenderSettingsNetwork();
     void RenderSettingsConnectivity();
+    void RenderSettingsWifi();
     void RenderSettingsPower();
     void RenderSettingsStorage();
     void RenderSettingsSystem();
@@ -182,6 +194,10 @@ private:
     std::string last_user_transcript_;
     std::string last_assistant_transcript_;
     std::string family_mode_ = "默认";
+    int wifi_selected_index_ = 0;
+    // Transient one-line feedback shown on the Wi-Fi page after an action
+    // (switch/forget/provision). Cleared each time the page is opened.
+    std::string wifi_action_hint_;
     int mini_game_score_ = 0;
     int mini_game_level_ = 1;
     PomodoroPhase pomodoro_phase_ = PomodoroPhase::kFocus;
