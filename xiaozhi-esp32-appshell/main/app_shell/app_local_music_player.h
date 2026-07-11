@@ -9,7 +9,9 @@ public:
     static AppLocalMusicPlayer& GetInstance();
 
     bool PlayPause();
+    bool Previous();
     bool Next();
+    bool SeekRelative(int delta_seconds);
     void Stop();
     bool playing() const { return playing_.load(); }
     std::string StatusLine() const;

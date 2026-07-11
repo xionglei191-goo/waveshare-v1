@@ -19,7 +19,9 @@ public:
                    const std::string& preferred_sha256 = "", const std::string& preferred_cache_path = "",
                    int preferred_size = 0, const std::string& preferred_id = "", int preferred_duration_sec = 0,
                    const std::string& preferred_artist = "", const std::string& preferred_source = "");
+    bool Previous();
     bool Next();
+    bool SeekRelative(int delta_seconds);
     bool CacheCurrent(const std::string& preferred_url = "", const std::string& preferred_title = "",
                       const std::string& preferred_format = "", const std::string& preferred_download_url = "",
                       const std::string& preferred_sha256 = "", const std::string& preferred_cache_path = "",

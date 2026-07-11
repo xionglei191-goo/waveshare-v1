@@ -172,13 +172,17 @@ void SelectWifiSwitchAction() { AppShell::GetInstance().SwitchToSelectedWifi(); 
 void ShowMiniGameAction() { AppShell::GetInstance().ShowMiniGame(); }
 void ToggleAiAction() { AppShell::GetInstance().ToggleAiListening(); }
 void MusicSdPlayPauseAction() { AppShell::GetInstance().RunBackendAction("music.sd.play_pause"); }
+void MusicSdPreviousAction() { AppShell::GetInstance().RunBackendAction("music.sd.previous"); }
+void MusicSdRewindAction() { AppShell::GetInstance().RunBackendAction("music.sd.seek", R"({"deltaSec":-15})"); }
+void MusicSdForwardAction() { AppShell::GetInstance().RunBackendAction("music.sd.seek", R"({"deltaSec":15})"); }
 void MusicSdNextAction() { AppShell::GetInstance().RunBackendAction("music.sd.next"); }
 void MusicServerPlayPauseAction() { AppShell::GetInstance().RunBackendAction("music.server.play_pause"); }
+void MusicServerPreviousAction() { AppShell::GetInstance().RunBackendAction("music.server.previous"); }
+void MusicServerRewindAction() { AppShell::GetInstance().RunBackendAction("music.server.seek", R"({"deltaSec":-15})"); }
+void MusicServerForwardAction() { AppShell::GetInstance().RunBackendAction("music.server.seek", R"({"deltaSec":15})"); }
 void MusicServerNextAction() { AppShell::GetInstance().RunBackendAction("music.server.next"); }
 void MusicServerCacheAction() { AppShell::GetInstance().RunBackendAction("music.server.cache"); }
 void MusicSdScanAction() { AppShell::GetInstance().RunBackendAction("music.sd.scan"); }
-void MusicVolumeDownAction() { AppShell::GetInstance().RunBackendAction("music.volume", R"({"delta":-5})"); }
-void MusicVolumeUpAction() { AppShell::GetInstance().RunBackendAction("music.volume", R"({"delta":5})"); }
 void ScheduleCompleteAction() { AppShell::GetInstance().CompleteNextSchedule(); }
 void ScheduleSnoozeAction() { AppShell::GetInstance().SnoozeNextSchedule(); }
 void ScreensaverStartAction() { AppShell::GetInstance().RunBackendAction("screensaver.start"); AppShell::GetInstance().ShowScreensaver(); }
@@ -227,13 +231,17 @@ void OnSelectWifiSwitch(lv_event_t*) { Schedule(SelectWifiSwitchAction); }
 void OnShowMiniGame(lv_event_t*) { Schedule(ShowMiniGameAction); }
 void OnToggleAi(lv_event_t*) { Schedule(ToggleAiAction); }
 void OnMusicSdPlayPause(lv_event_t*) { Schedule(MusicSdPlayPauseAction); }
+void OnMusicSdPrevious(lv_event_t*) { Schedule(MusicSdPreviousAction); }
+void OnMusicSdRewind(lv_event_t*) { Schedule(MusicSdRewindAction); }
+void OnMusicSdForward(lv_event_t*) { Schedule(MusicSdForwardAction); }
 void OnMusicSdNext(lv_event_t*) { Schedule(MusicSdNextAction); }
 void OnMusicServerPlayPause(lv_event_t*) { Schedule(MusicServerPlayPauseAction); }
+void OnMusicServerPrevious(lv_event_t*) { Schedule(MusicServerPreviousAction); }
+void OnMusicServerRewind(lv_event_t*) { Schedule(MusicServerRewindAction); }
+void OnMusicServerForward(lv_event_t*) { Schedule(MusicServerForwardAction); }
 void OnMusicServerNext(lv_event_t*) { Schedule(MusicServerNextAction); }
 void OnMusicServerCache(lv_event_t*) { Schedule(MusicServerCacheAction); }
 void OnMusicSdScan(lv_event_t*) { Schedule(MusicSdScanAction); }
-void OnMusicVolumeDown(lv_event_t*) { Schedule(MusicVolumeDownAction); }
-void OnMusicVolumeUp(lv_event_t*) { Schedule(MusicVolumeUpAction); }
 void OnScheduleComplete(lv_event_t*) { Schedule(ScheduleCompleteAction); }
 void OnScheduleSnooze(lv_event_t*) { Schedule(ScheduleSnoozeAction); }
 void OnScreensaverStart(lv_event_t*) { Schedule(ScreensaverStartAction); }
@@ -331,20 +339,15 @@ lv_obj_t* CreateButton(lv_obj_t* parent, const char* text, int x, int y, int wid
     return button;
 }
 
-lv_obj_t* CreateControlButton(lv_obj_t* parent, const char* text, int x, int y, int width, int height,
-                              lv_event_cb_t callback, bool active = false) {
-    return CreateButton(parent, text, x, y, width, height, callback, active, LV_EVENT_PRESSED, 4);
-}
-
 void SetButtonText(lv_obj_t* button, const char* text) {
     if (button == nullptr) return;
     lv_obj_t* label = lv_obj_get_child(button, 0);
     if (label != nullptr) lv_label_set_text(label, text);
 }
 
-lv_obj_t* CreateVolumeButton(lv_obj_t* parent, const char* text, int x, int y, int width, int height,
-                             lv_event_cb_t callback) {
-    return CreateButton(parent, text, x, y, width, height, callback, false, LV_EVENT_RELEASED, 4);
+lv_obj_t* CreateMusicButton(lv_obj_t* parent, const char* text, int x, int width, lv_event_cb_t callback,
+                            bool active = false) {
+    return CreateButton(parent, text, x, 184, width, 34, callback, active, LV_EVENT_RELEASED, 4);
 }
 
 std::string FormatTime(int seconds) {
@@ -627,6 +630,16 @@ int ExtractVolumeDelta(const std::string& params_json) {
     return delta;
 }
 
+int ExtractSeekDeltaSeconds(const std::string& params_json) {
+    auto root = cJSON_Parse(params_json.c_str());
+    if (root == nullptr) {
+        return 0;
+    }
+    const int delta = JsonInt(root, "deltaSec", JsonInt(root, "delta", 0));
+    cJSON_Delete(root);
+    return delta;
+}
+
 std::string BuildVolumeParams(int delta) {
     return "{\"delta\":" + std::to_string(delta) + "}";
 }
@@ -644,6 +657,12 @@ std::string ActionDisplayName(const std::string& action) {
     }
     if (action == "music.next" || action == "music.server.next" || action == "music.sd.next") {
         return "切到下一项";
+    }
+    if (action == "music.previous" || action == "music.server.previous" || action == "music.sd.previous") {
+        return "切到上一项";
+    }
+    if (action == "music.seek" || action == "music.server.seek" || action == "music.sd.seek") {
+        return "快进快退";
     }
     if (action == "music.volume") {
         return "音量调整";
@@ -1019,6 +1038,19 @@ void AppShell::RunBackendAction(const std::string& action, const std::string& pa
         AppLocalMusicPlayer::GetInstance().PlayPause();
         subtitle_ = AppLocalMusicPlayer::GetInstance().StatusLine();
         RefreshSubtitleOnly();
+    } else if ((action == "music.previous" && backend_.music.active_source == "sd") || action == "music.sd.previous") {
+        AppServerMusicPlayer::GetInstance().Stop();
+        AppLocalMusicPlayer::GetInstance().Previous();
+        subtitle_ = AppLocalMusicPlayer::GetInstance().StatusLine();
+        RefreshSubtitleOnly();
+        return;
+    } else if ((action == "music.seek" && backend_.music.active_source == "sd") || action == "music.sd.seek") {
+        const int delta_seconds = ExtractSeekDeltaSeconds(params_json);
+        const bool ok = AppLocalMusicPlayer::GetInstance().SeekRelative(delta_seconds);
+        subtitle_ = ok ? AppLocalMusicPlayer::GetInstance().StatusLine() :
+                    (delta_seconds < 0 ? "快退暂未支持" : "快进暂未支持");
+        RefreshSubtitleOnly();
+        return;
     } else if ((action == "music.next" && backend_.music.active_source == "sd") || action == "music.sd.next") {
         AppServerMusicPlayer::GetInstance().Stop();
         AppLocalMusicPlayer::GetInstance().Next();
@@ -1041,6 +1073,21 @@ void AppShell::RunBackendAction(const std::string& action, const std::string& pa
             backend_.music.server.source);
         subtitle_ = AppServerMusicPlayer::GetInstance().StatusLine();
         RefreshSubtitleOnly();
+    } else if ((action == "music.previous" && backend_.music.active_source == "server") ||
+               action == "music.server.previous") {
+        AppLocalMusicPlayer::GetInstance().Stop();
+        AppServerMusicPlayer::GetInstance().Previous();
+        subtitle_ = AppServerMusicPlayer::GetInstance().StatusLine();
+        RefreshSubtitleOnly();
+        return;
+    } else if ((action == "music.seek" && backend_.music.active_source == "server") ||
+               action == "music.server.seek") {
+        const int delta_seconds = ExtractSeekDeltaSeconds(params_json);
+        const bool ok = AppServerMusicPlayer::GetInstance().SeekRelative(delta_seconds);
+        subtitle_ = ok ? AppServerMusicPlayer::GetInstance().StatusLine() :
+                    (delta_seconds < 0 ? "快退暂未支持" : "快进暂未支持");
+        RefreshSubtitleOnly();
+        return;
     } else if ((action == "music.next" && backend_.music.active_source == "server") || action == "music.server.next") {
         AppLocalMusicPlayer::GetInstance().Stop();
         AppServerMusicPlayer::GetInstance().Next();
@@ -1639,11 +1686,12 @@ void AppShell::RenderMusicLocal() {
     std::string progress = FormatMusicProgressText(position_ms, duration_ms, has_duration);
     CreateLabel(content_, progress.c_str(), 0, 152, 180, kMutedText, LV_TEXT_ALIGN_CENTER);
 
-    CreateVolumeButton(content_, "-", -124, 184, 38, 36, OnMusicVolumeDown);
-    CreateControlButton(content_, playing ? "暂停" : "播放", -67, 184, 58, 36, OnMusicSdPlayPause, playing);
-    CreateControlButton(content_, "下首", -9, 184, 48, 36, OnMusicSdNext);
-    CreateControlButton(content_, "扫描", 49, 184, 54, 36, OnMusicSdScan);
-    CreateVolumeButton(content_, "+", 118, 184, 38, 36, OnMusicVolumeUp);
+    CreateMusicButton(content_, "|<", -122, 38, OnMusicSdPrevious);
+    CreateMusicButton(content_, "<<", -79, 38, OnMusicSdRewind);
+    CreateMusicButton(content_, "P/S", -31, 48, OnMusicSdPlayPause, playing);
+    CreateMusicButton(content_, ">>", 17, 38, OnMusicSdForward);
+    CreateMusicButton(content_, ">|", 60, 38, OnMusicSdNext);
+    CreateMusicButton(content_, "扫描", 109, 50, OnMusicSdScan);
 }
 
 void AppShell::RenderMusicServer() {
@@ -1685,11 +1733,12 @@ void AppShell::RenderMusicServer() {
     std::string progress = FormatMusicProgressText(position_ms, duration_ms, has_duration);
     CreateLabel(content_, progress.c_str(), 0, 152, 180, kMutedText, LV_TEXT_ALIGN_CENTER);
 
-    CreateVolumeButton(content_, "-", -124, 184, 38, 36, OnMusicVolumeDown);
-    CreateControlButton(content_, playing ? "暂停" : "播放", -67, 184, 58, 36, OnMusicServerPlayPause, playing);
-    CreateControlButton(content_, "下集", -9, 184, 48, 36, OnMusicServerNext);
-    CreateControlButton(content_, "缓存", 49, 184, 54, 36, OnMusicServerCache);
-    CreateVolumeButton(content_, "+", 118, 184, 38, 36, OnMusicVolumeUp);
+    CreateMusicButton(content_, "|<", -122, 38, OnMusicServerPrevious);
+    CreateMusicButton(content_, "<<", -79, 38, OnMusicServerRewind);
+    CreateMusicButton(content_, "P/S", -31, 48, OnMusicServerPlayPause, playing);
+    CreateMusicButton(content_, ">>", 17, 38, OnMusicServerForward);
+    CreateMusicButton(content_, ">|", 60, 38, OnMusicServerNext);
+    CreateMusicButton(content_, "缓存", 109, 50, OnMusicServerCache);
 }
 
 void AppShell::RenderScreensaver() {

@@ -289,6 +289,25 @@ bool AppServerMusicPlayer::Next() {
     return StartCurrent();
 }
 
+bool AppServerMusicPlayer::Previous() {
+    Stop();
+    if (tracks_.empty() && !RefreshTracks()) {
+        return false;
+    }
+    if (tracks_.empty()) {
+        last_error_ = "未发现服务器播客";
+        return false;
+    }
+    current_index_ = (current_index_ - 1 + static_cast<int>(tracks_.size())) % static_cast<int>(tracks_.size());
+    return StartCurrent();
+}
+
+bool AppServerMusicPlayer::SeekRelative(int delta_seconds) {
+    (void)delta_seconds;
+    last_error_ = "暂不支持快进快退";
+    return false;
+}
+
 void AppServerMusicPlayer::Stop() {
     stop_requested_.store(true);
     const bool was_playing = playing_.exchange(false);

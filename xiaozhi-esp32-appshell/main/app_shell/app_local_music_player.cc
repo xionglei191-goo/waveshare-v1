@@ -55,6 +55,17 @@ bool AppLocalMusicPlayer::PlayPause() {
     return StartCurrent();
 }
 
+bool AppLocalMusicPlayer::Previous() {
+    const auto& files = AppStorageManager::GetInstance().music_files();
+    if (files.empty()) {
+        last_error_ = "未发现 SD 音乐";
+        return false;
+    }
+    Stop();
+    current_index_ = FindNextSupportedIndex(current_index_ - 1);
+    return StartCurrent();
+}
+
 bool AppLocalMusicPlayer::Next() {
     const auto& files = AppStorageManager::GetInstance().music_files();
     if (files.empty()) {
@@ -64,6 +75,12 @@ bool AppLocalMusicPlayer::Next() {
     Stop();
     current_index_ = FindNextSupportedIndex(current_index_ + 1);
     return StartCurrent();
+}
+
+bool AppLocalMusicPlayer::SeekRelative(int delta_seconds) {
+    (void)delta_seconds;
+    last_error_ = "暂不支持快进快退";
+    return false;
 }
 
 void AppLocalMusicPlayer::Stop() {
