@@ -167,6 +167,7 @@ private:
     static void PageContextTask(void* arg);
     bool IsAiActive() const;
     bool CanRunBackendNetworkTasks() const;
+    bool CanRunBackgroundNetworkTasks() const;
     bool HasInternalSramReserve(size_t minimum_bytes) const;
     std::string DeviceIp() const;
     std::string DeviceStatusLine() const;
@@ -194,6 +195,7 @@ private:
     int last_backend_action_tick_ = -1000;
     int last_backend_event_tick_ = -1000;
     int backend_network_resume_tick_ = 0;
+    bool server_media_was_playing_ = false;
     int last_remote_page_tick_ = 0;
     int last_resource_manifest_tick_ = 0;
     int last_device_heartbeat_tick_ = -1000;

@@ -1052,7 +1052,7 @@ void AppShell::RunBackendAction(const std::string& action, const std::string& pa
         return;
     }
 
-    if (!CanRunBackendNetworkTasks()) {
+    if (!CanRunBackgroundNetworkTasks()) {
         QueueBackendAction(action, params_json);
         RefreshSubtitleOnly();
         return;
@@ -1139,7 +1139,12 @@ void AppShell::Tick() {
     tick_count_++;
     ApplyQueuedLocalVolumeDelta();
     AppConnectivityManager::GetInstance().Refresh();
-    if (tick_count_ % 30 == 0 && CanRunBackendNetworkTasks()) {
+    const bool server_media_playing = AppServerMusicPlayer::GetInstance().playing();
+    if (server_media_was_playing_ && !server_media_playing) {
+        backend_network_resume_tick_ = std::max(backend_network_resume_tick_, tick_count_ + kBackendResumeDelaySec);
+    }
+    server_media_was_playing_ = server_media_playing;
+    if (tick_count_ % 30 == 0 && CanRunBackgroundNetworkTasks()) {
         AppResourceManager::GetInstance().Refresh();
         AppSyncQueue::GetInstance().Refresh();
     }
@@ -1231,7 +1236,7 @@ void AppShell::Tick() {
     if (tick_count_ - last_page_context_tick_ >= kPageContextRefreshIntervalSec) {
         page_context_pending_.store(true);
     }
-    if (page_context_pending_.load() && CanRunBackendNetworkTasks()) {
+    if (page_context_pending_.load() && CanRunBackgroundNetworkTasks()) {
         StartPageContextTask();
     }
     if (!DispatchQueuedBackendAction()) {
@@ -2547,7 +2552,7 @@ bool AppShell::DispatchQueuedBackendAction() {
         backend_events_running_.load()) {
         return false;
     }
-    if (!CanRunBackendNetworkTasks()) {
+    if (!CanRunBackgroundNetworkTasks()) {
         return false;
     }
     if (tick_count_ - last_backend_action_tick_ < 1) {
@@ -2562,7 +2567,7 @@ bool AppShell::DispatchQueuedBackendAction() {
 
     if (!StartBackendActionTask(action, params)) {
         QueueBackendAction(action, params);
-        subtitle_ = CanRunBackendNetworkTasks() ? "动作任务启动失败" :
+        subtitle_ = CanRunBackgroundNetworkTasks() ? "动作任务启动失败" :
                                                   ("已延后: " + ActionDisplayName(action));
         RefreshSubtitleOnly();
         return false;
@@ -2656,6 +2661,7 @@ void AppShell::ExecuteBackendCommand(const AppBackendEventState& event_state) {
     } else if (event_state.command_type == "media.server.stop") {
         backend_.music.server.playing = false;
         AppServerMusicPlayer::GetInstance().Stop();
+        backend_network_resume_tick_ = std::max(backend_network_resume_tick_, tick_count_ + kBackendResumeDelaySec);
         subtitle_ = "服务器播客已停止";
         WakeDisplayForEvent("后台停止");
         ShowMusicServer();
@@ -2685,7 +2691,7 @@ void AppShell::ExecuteBackendCommand(const AppBackendEventState& event_state) {
 }
 
 bool AppShell::StartBackendActionTask(const std::string& action, const std::string& params_json) {
-    if (!CanRunBackendNetworkTasks()) {
+    if (!CanRunBackgroundNetworkTasks()) {
         return false;
     }
     auto* context = new BackendActionContext{action, params_json.empty() ? "{}" : params_json};
@@ -2704,7 +2710,7 @@ bool AppShell::StartBackendActionTask(const std::string& action, const std::stri
 
 void AppShell::StartPageContextTask() {
     page_context_pending_.store(true);
-    if (!CanRunBackendNetworkTasks() || page_context_running_.exchange(true)) {
+    if (!CanRunBackgroundNetworkTasks() || page_context_running_.exchange(true)) {
         return;
     }
     page_context_pending_.store(false);
@@ -2720,7 +2726,7 @@ void AppShell::StartBackendRefresh(bool force) {
     if (!initialized_) {
         return;
     }
-    if (!CanRunBackendNetworkTasks()) {
+    if (!CanRunBackgroundNetworkTasks()) {
         return;
     }
     if (!HasInternalSramReserve(kSramSoftReserveBytes)) {
@@ -2783,7 +2789,7 @@ void AppShell::BackendRefreshTask(void* arg) {
     delete context;
 
     auto& shell = AppShell::GetInstance();
-    if (!shell.CanRunBackendNetworkTasks()) {
+    if (!shell.CanRunBackgroundNetworkTasks()) {
         Application::GetInstance().Schedule([requested_tick]() {
             auto& shell = AppShell::GetInstance();
             shell.backend_refreshing_.store(false);
@@ -2949,7 +2955,7 @@ void AppShell::BackendActionTask(void* arg) {
     delete context;
 
     auto& shell = AppShell::GetInstance();
-    if (!shell.CanRunBackendNetworkTasks()) {
+    if (!shell.CanRunBackgroundNetworkTasks()) {
         Application::GetInstance().Schedule([action, params]() {
             auto& shell = AppShell::GetInstance();
             shell.backend_action_busy_.store(false);
@@ -2996,7 +3002,7 @@ void AppShell::PageContextTask(void*) {
     const std::string page = shell.CurrentPageKey();
     const std::string family_mode = shell.CurrentFamilyMode();
     const std::string page_state = shell.CurrentPageStateJson();
-    const bool ok = shell.CanRunBackendNetworkTasks() &&
+    const bool ok = shell.CanRunBackgroundNetworkTasks() &&
                     AppBackendClient::GetInstance().PostDeviceContext(page, family_mode, page_state);
     Application::GetInstance().Schedule([page, ok]() {
         auto& shell = AppShell::GetInstance();
@@ -3011,7 +3017,7 @@ void AppShell::PageContextTask(void*) {
         // A changed page should be coalesced immediately. Network failures are
         // retried by the one-second Tick loop so boot/offline states cannot
         // create a tight task-retry loop.
-        if (ok && page_changed && shell.CanRunBackendNetworkTasks()) {
+        if (ok && page_changed && shell.CanRunBackgroundNetworkTasks()) {
             shell.StartPageContextTask();
         }
     });
@@ -3027,6 +3033,10 @@ bool AppShell::CanRunBackendNetworkTasks() const {
     return initialized_ && AppConnectivityManager::GetInstance().status().online &&
            !IsAiActive() && tick_count_ >= backend_network_resume_tick_ &&
            HasInternalSramReserve(kSramCriticalReserveBytes);
+}
+
+bool AppShell::CanRunBackgroundNetworkTasks() const {
+    return CanRunBackendNetworkTasks() && !AppServerMusicPlayer::GetInstance().playing();
 }
 
 bool AppShell::HasInternalSramReserve(size_t minimum_bytes) const {

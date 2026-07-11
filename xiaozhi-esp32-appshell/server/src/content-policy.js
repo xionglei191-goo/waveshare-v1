@@ -2,8 +2,8 @@ const REPRESENTATIVE_CONTENT_RE = /\b(sample|smoke|representative|test|demo|diag
 const CONTENT_RULES = {
   album: { dirs: ["images/"], extensions: [".jpg", ".jpeg", ".png", ".bin"] },
   podcast: { dirs: ["music/server/"], extensions: [".mp3", ".ogg", ".opus"] },
-  english: { dirs: ["courses/english/"], extensions: [".json"] },
-  game: { dirs: ["games/"], extensions: [".json"] },
+  english: { dirs: ["courses/english/"], extensions: [".json", ".mp3", ".ogg", ".opus", ".jpg", ".jpeg", ".png"] },
+  game: { dirs: ["games/"], extensions: [".json", ".mp3", ".ogg", ".opus", ".jpg", ".jpeg", ".png"] },
   story: { dirs: ["courses/stories/"], extensions: [".json", ".mp3", ".ogg", ".opus"] }
 };
 
@@ -70,6 +70,22 @@ function validateJsonContent(type, buffer) {
   return value;
 }
 
+function validateMediaSignature(relativePath, buffer) {
+  const lower = relativePath.toLowerCase();
+  const starts = (...bytes) => bytes.every((byte, index) => buffer[index] === byte);
+  if (lower.endsWith(".mp3")) {
+    const id3 = buffer.subarray(0, 3).toString("ascii") === "ID3";
+    const frame = buffer.length >= 2 && buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0;
+    if (!id3 && !frame) throw importError("MP3 content has an invalid header");
+  } else if (lower.endsWith(".ogg") || lower.endsWith(".opus")) {
+    if (buffer.subarray(0, 4).toString("ascii") !== "OggS") throw importError("Ogg/Opus content has an invalid header");
+  } else if (lower.endsWith(".png")) {
+    if (!starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) throw importError("PNG content has an invalid header");
+  } else if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+    if (!starts(0xff, 0xd8, 0xff)) throw importError("JPEG content has an invalid header");
+  }
+}
+
 function validateContentImport(body = {}) {
   const item = body.item || body;
   const type = String(item.type || "").trim();
@@ -88,7 +104,8 @@ function validateContentImport(body = {}) {
   const buffer = Buffer.from(String(encoded), "base64");
   if (!buffer.length) throw importError("content file is empty");
   if (buffer.length > 5 * 1024 * 1024) throw importError("content file is larger than 5MB", 413);
-  const parsed = validateJsonContent(type, buffer);
+  const parsed = lower.endsWith(".json") ? validateJsonContent(type, buffer) : null;
+  validateMediaSignature(relativePath, buffer);
   return { type, relativePath, buffer, parsed };
 }
 

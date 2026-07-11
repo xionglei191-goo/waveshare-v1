@@ -65,6 +65,8 @@ function upsertCatalogItem(state, item) {
     language: item.language || "zh-CN",
     durationSec: Number(item.durationSec || item.duration || 0),
     cover: item.cover || "",
+    assetRole: item.assetRole || (String(item.path || "").toLowerCase().endsWith(".json") ? "lesson" : "media"),
+    lessonId: item.lessonId || "",
     path: item.path || "",
     packId: safeId(item.packId || item.pack || "family-base", "family-base"),
     sourceKind: item.sourceKind || (looksLikeRepresentativeContent(item) ? "diagnostic" : "real"),
