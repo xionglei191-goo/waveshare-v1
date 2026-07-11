@@ -1,0 +1,14 @@
+[Unit]
+Description=Xiaozhi Family Hub SQLite backup
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/xiaozhi-family-hub/current
+Environment=DEPLOY_BASE=/opt/xiaozhi-family-hub
+Environment=SQLITE_FILE=/opt/xiaozhi-family-hub/shared/data/family-hub.sqlite
+Environment=BACKUP_DIR=/opt/xiaozhi-family-hub/backups/sqlite
+Environment=DAILY_KEEP=14
+Environment=WEEKLY_KEEP=8
+ExecStart=/usr/bin/env bash /opt/xiaozhi-family-hub/current/scripts/backup-sqlite.sh
+User=xiaozhi
+Group=xiaozhi

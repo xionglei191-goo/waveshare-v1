@@ -1,0 +1,23 @@
+{
+  "title": "家庭小问答",
+  "type": "quiz",
+  "entry": "tap",
+  "ageRange": "family",
+  "questions": [
+    {
+      "text": "餐前第一件事是什么？",
+      "choices": ["洗手", "开电视", "找玩具"],
+      "answer": 0
+    },
+    {
+      "text": "别人帮助你以后应该说什么？",
+      "choices": ["谢谢", "快一点", "不知道"],
+      "answer": 0
+    },
+    {
+      "text": "睡觉前适合做什么？",
+      "choices": ["刷牙", "喝可乐", "大声跑跳"],
+      "answer": 0
+    }
+  ]
+}

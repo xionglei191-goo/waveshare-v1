@@ -1,0 +1,15 @@
+{
+    "manufacturer": "waveshare",
+    "target": "esp32s3",
+    "builds": [
+        {
+            "name": "esp32-s3-touch-lcd-1.85b-appshell",
+            "sdkconfig_append": [
+                "CONFIG_USE_WECHAT_MESSAGE_STYLE=n",
+                "CONFIG_USE_DEVICE_AEC=y",
+                "CONFIG_USE_HOTSPOT_WIFI_PROVISIONING=y",
+                "CONFIG_USE_ESP_BLUFI_WIFI_PROVISIONING=n"
+            ]
+        }
+    ]
+}

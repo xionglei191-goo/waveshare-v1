@@ -1,0 +1,222 @@
+# =============================================================================
+# xiaozhi-esp32-server 配置模板 —— 自建语音入口 (Self_Hosted_Voice_Server)
+# Feature: selfhosted-voice-provider-page-agents
+# 覆盖 Task 6 (Streaming Profile) + Task 7 (服务器鉴权)
+#
+# 用法:
+#   1. 把本文件复制为 xiaozhi-esp32-server 部署目录下的 data/.config.yaml
+#      (去掉 .example 后缀), 再填入真实密钥。
+#   2. 所有密钥用占位符 <your-...> 标注, 严禁把真实密钥提交进版本库。
+#   3. 具体部署步骤见同目录 DEPLOYMENT.md。
+#
+# -----------------------------------------------------------------------------
+# 设计目标: Time_To_First_Audio (用户说完话 → 圆屏播出第一个音频包) ≤ 1500ms
+# (Req 5.2)。为此整条管线 (Req 5.1, 8.1-8.4) 都选"流式 + 快首字"的 provider,
+# 并把意图判定内联进 LLM 轮次 (Intent=function_call), 避免额外串行的 LLM 分类跳。
+#
+#   阶段              延迟贡献                     选型对策 (Streaming_Profile)
+#   ----------------  ---------------------------  ----------------------------
+#   ASR final         流式 ASR 边说边出, VAD 收尾   DoubaoStreamASR (流式)
+#                     后 final 很快
+#   LLM TTFT          首 token 尽快吐出            qwen-flash / glm-4-flash (快首字)
+#   工具跳            内联 function_call, 省掉      Intent: function_call (Req 5.3)
+#                     第二次串行 LLM 分类
+#   TTS 首句          首句即开始合成, 不等全文      HuoshanDoubleStreamTTS (双向流式)
+#   播放             Opus 预缓冲立即下发设备        服务端流式输出
+#
+# 页面路由: 每轮拿到最终转写后, LLM 通过 Intent=function_call 内联调用
+# family_agent_ask 工具, 该插件 HTTP POST 到 Family_Backend 的
+# POST /api/agent/ask, 由后端 agentForPage() 路由到匹配的 Page Agent。
+# Family_Backend (Node.js @ 192.168.31.246:3100) 仍是唯一"大脑", 本服务器只做
+# 薄委托 (Req 1.2, 1.3)。
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# 选定模块 (Streaming_Profile) —— Req 5.1, 8.1-8.4
+# -----------------------------------------------------------------------------
+selected_module:
+  # 语音活动检测: 本地 Silero VAD, 负责判定用户说话开始/结束 (VAD end 触发 final)。
+  VAD: SileroVAD
+
+  # 流式 ASR (Req 8.1): 边说边出 partial, VAD 收尾后快速给出 final 转写。
+  # 备选流式 ASR:
+  #   - FunASRServer            本地/自托管 2-pass 流式 (无外部密钥, 时延依赖算力)
+  #   - 阿里 paraformer-realtime (AliyunStreamASR / paraformer-realtime, 云端流式)
+  #   - XunfeiStreamASR          讯飞流式
+  ASR: DoubaoStreamASR
+
+  # LLM (Req 8.2): OpenAI 兼容接口, 要求"快 TTFT + 支持 function calling"。
+  # 推荐模型: qwen-flash / doubao / glm-4-flash (首字延迟低)。
+  LLM: OpenAILLM
+
+  # 视觉 LLM (可选): 仅在需要图像理解时启用, 与首字延迟目标无关。
+  VLLM: ChatGLMVLLM
+
+  # 流式 TTS (Req 8.3): 首句即开始合成并下发, 不等全文, 直接压低首音频延迟。
+  # 备选流式 TTS:
+  #   - index_stream  (IndexTTS 流式)
+  TTS: HuoshanDoubleStreamTTS
+
+  # 无长期记忆: 家庭决策/上下文全部由 Family_Backend 拥有, 语音入口不留存记忆。
+  Memory: nomem
+
+  # 意图模式 = function_call (Req 5.3, 8.4): 工具选择内联在 LLM 轮次内完成,
+  # 不再单独跑一次串行的意图分类 LLM, 直接省掉一个串行跳, 服务于 ≤1500ms 目标。
+  Intent: function_call
+
+# 连续对话断句。700ms 在当前家庭近场设备上兼顾停顿容忍与首音频延迟；
+# 若现场噪声较大，可回调到 900-1000ms。
+VAD:
+  SileroVAD:
+    type: silero
+    threshold: 0.5
+    threshold_low: 0.2
+    min_silence_duration_ms: 700
+
+
+# -----------------------------------------------------------------------------
+# Provider 详细配置块 —— 记录以复现 Streaming_Profile (Req 8.5)
+# 所有密钥均为占位符; 部署时替换为真实值, 并放入私有 secrets 管理。
+# -----------------------------------------------------------------------------
+
+# 流式 ASR provider 详情 (Req 8.1)
+ASR:
+  DoubaoStreamASR:
+    # 火山引擎豆包流式 ASR (WebSocket 双向流)
+    type: doubao_stream
+    appid: <your-doubao-asr-appid>
+    access_token: <your-doubao-asr-access-token>
+    # cluster / 模型名按火山控制台实际值填写
+    cluster: volcengine_streaming_common
+    output_dir: tmp/
+
+  # --- 备选: 本地自托管 FunASR 流式, 无外部密钥 ---
+  # FunASRServer:
+  #   type: fun_server
+  #   host: 127.0.0.1
+  #   port: 10096
+  #   is_ssl: false
+
+  # --- 备选: 阿里 paraformer-realtime 云端流式 ---
+  # AliyunStreamASR:
+  #   type: aliyun_stream
+  #   appkey: <your-aliyun-asr-appkey>
+  #   access_key_id: <your-aliyun-access-key-id>
+  #   access_key_secret: <your-aliyun-access-key-secret>
+  #   model: paraformer-realtime-v2
+
+  # --- 备选: 讯飞流式 ASR ---
+  # XunfeiStreamASR:
+  #   type: xunfei_stream
+  #   app_id: <your-xunfei-appid>
+  #   api_key: <your-xunfei-api-key>
+  #   api_secret: <your-xunfei-api-secret>
+
+# 快 TTFT + function calling 的 LLM provider 详情 (Req 8.2)
+LLM:
+  OpenAILLM:
+    # OpenAI 兼容端点; 可指向阿里百炼(qwen-flash)/火山方舟(doubao)/智谱(glm-4-flash) 等
+    type: openai
+    base_url: <your-openai-compatible-base-url>   # 例: https://dashscope.aliyuncs.com/compatible-mode/v1
+    model_name: gpt-5.5                           # 复杂推理主模型
+    api_key: <your-llm-api-key>
+    # 温度/超时按需微调; 首字延迟优先, 不建议开过大 max_tokens
+    temperature: 0.7
+    timeout:
+      pool: 2
+      connect: 3
+      write: 5
+      read: 20
+
+# 流式 TTS provider 详情 (Req 8.3)
+TTS:
+  HuoshanDoubleStreamTTS:
+    # 火山引擎豆包双向流式 TTS (首句即合成即下发)
+    type: huoshan_double_stream
+    appid: <your-huoshan-tts-appid>
+    access_token: <your-huoshan-tts-access-token>
+    resource_id: volc.service_type.10029
+    speaker: <your-tts-speaker-id>                # 音色 ID, 按控制台填写
+    output_dir: tmp/
+    tts_timeout: 15
+
+  # --- 备选: IndexTTS 流式 ---
+  # index_stream:
+  #   type: index_stream
+  #   base_url: <your-index-tts-base-url>
+  #   api_key: <your-index-tts-api-key>
+
+# 视觉 LLM (可选, 与 ≤1500ms 语音首音频目标无关)
+VLLM:
+  ChatGLMVLLM:
+    type: openai
+    base_url: <your-vlm-base-url>
+    model_name: glm-4v-flash
+    api_key: <your-vlm-api-key>
+
+# Provider 原生会话控制。它在 Page Router 和页面 Agent 之前执行，
+# 因此这些短语只关闭当前语音会话，不会误触发音乐/相册的“停止”能力。
+exit_commands:
+  - "退出"
+  - "关闭"
+  - "停止对话"
+  - "结束对话"
+  - "退出对话"
+
+
+# -----------------------------------------------------------------------------
+# 意图 / 函数调用工具登记 —— 对齐设备端页面路由 (Req 1.2, 5.3; Task 11)
+# -----------------------------------------------------------------------------
+Intent:
+  function_call:
+    # 登记的函数调用工具列表。family_agent_ask 是本 feature 的核心工具:
+    # 把页面内的家庭请求路由到 Family_Backend 的 Page Agent。
+    # 插件文件: plugins_func/functions/family_agent_ask.py (Option A, 推荐)。
+    # LLM 应先调用设备 MCP 工具 self.page.get_context 拿到 page/familyMode,
+    # 再把二者作为参数传入 family_agent_ask。
+    functions:
+      # Page Router 在 ASR 完成后确定性调用 Family Hub。兼容插件仍随镜像
+      # 部署, 但不再交给 LLM 选择, 避免同一轮重复调用后端。
+      - get_news_from_newsnow
+      - handle_exit_intent
+
+
+# -----------------------------------------------------------------------------
+# 服务器鉴权 (Task 7) —— Req 7.1, 7.3, 7.4
+# -----------------------------------------------------------------------------
+server:
+  ip: 0.0.0.0
+  # 语音 WebSocket 端口 (Voice_WebSocket_URL = ws://<host>:8000/xiaozhi/v1/)
+  port: 8100
+  # OTA / 配置发现端口 (OTA_Config_Endpoint = http://<host>:8003/xiaozhi/ota/)
+  http_port: 8003
+
+  auth:
+    # 启用鉴权: 未携带有效 Voice_Provider_Auth_Token 的语音会话一律拒绝,
+    # 且不启动语音管线 (Req 7.1, 7.4)。局域网部署也建议保持开启 (Req 7.3)。
+    enabled: true
+    # 允许的设备 token 列表。名为 family-round-screen 的 token 下发给圆屏设备:
+    # 该 token 通过 OTA 响应的 websocket.token 字段发给设备, 设备在建立语音
+    # 会话时作为鉴权头出示 (设备侧无需改固件, 见 DEPLOYMENT.md Task 8)。
+    tokens:
+      - name: family-round-screen
+        token: <your-voice-provider-auth-token>
+    # 可选: 限定允许的 device-id 白名单
+    # allowed_devices:
+    #   - "esp32-185b"
+
+
+# -----------------------------------------------------------------------------
+# 说明
+# -----------------------------------------------------------------------------
+# * family_agent_ask 插件所需的两个环境变量 (在容器/进程环境中设置, 不写进本文件):
+#     FAMILY_BACKEND_URL = http://192.168.31.246:3100
+#     XIAOZHI_TOOL_TOKEN = <your-tool-auth-token>   # Family_Backend 工具鉴权 (Req 7.2)
+#   插件会把 XIAOZHI_TOOL_TOKEN 作为 Authorization: Bearer 头发给后端,
+#   并在返回前从 speech/display 中剥离所有密钥字段 (Req 7.5)。
+# * 密钥绝不进入 speech / display / TTS 输出 (Req 7.5)。
+# * Router3 默认把普通闲聊交给 `gpt-5.4-mini`，复杂解释/分析交给 `gpt-5.5`；
+#   可通过 `FAMILY_LIGHTWEIGHT_MODEL` / `FAMILY_COMPLEX_MODEL` 覆盖。Page Agent
+#   已处理的请求不会调用任何大模型。
+# * Option B (MCP 工具路径) 见 data/.mcp_server_settings.json.example, 仅为备选。

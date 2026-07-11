@@ -1,0 +1,28 @@
+{
+  "name": "xiaozhi-family-hub-server",
+  "version": "0.2.0",
+  "private": true,
+  "description": "LAN Action Hub for the Xiaozhi ESP32-S3 family round screen.",
+  "main": "index.js",
+  "scripts": {
+    "check": "node --check index.js && node --check src/app.js && node --check src/config.js && node --check src/routes.js && node --check src/routes/family.js && node --check src/routes/devices.js && node --check src/routes/admin.js && node --check src/actions.js && node --check src/agents.js && node --check src/ai-runtime.js && node --check src/auth-tokens.js && node --check src/capabilities.js && node --check src/member-context.js && node --check src/family-service.js && node --check src/domain.js && node --check src/store.js && node --check src/sqlite-store.js && node --check src/sqlite-migrations.js && node --check src/ui-pages.js && node --check src/resources.js && node --check src/content.js && node --check src/content-policy.js && node --check src/acceptance.js && node --check src/acceptance-pack.js && node --check src/home-assistant.js && node --check src/integration-status.js && node --check src/memory.js && node --check src/media.js && node --check src/weather.js && node --check src/sync.js && node --check src/security.js && node --check src/intent.js && node --check src/device-registry.js && node --check src/observability.js && node --check src/request-controls.js && node --check src/events.js && node --check src/device-commands.js && node --check src/admin-auth.js && node --check src/xiaozhi-mcp-bridge.js && node --check scripts/acceptance-preflight.js && node --check scripts/import-real-content.js && node --check scripts/acceptance-evidence-pack.js && node --check scripts/verify-real-content.js",
+    "test": "node --test test/*.test.js",
+    "test:sqlite-store": "node --test test/sqlite-store.test.js",
+    "test:weather": "node scripts/weather-test.js",
+    "smoke": "node scripts/smoke-test.js",
+    "smoke:sqlite": "STORE_DRIVER=sqlite node scripts/smoke-test.js",
+    "smoke:sqlite:relational": "STORE_DRIVER=sqlite SQLITE_RELATIONAL_READS=1 SQLITE_COMPACT_KV=1 node scripts/smoke-test.js",
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "mcp:bridge": "node src/xiaozhi-mcp-bridge.js",
+    "acceptance:preflight": "node scripts/acceptance-preflight.js",
+    "acceptance:pack": "node scripts/acceptance-evidence-pack.js",
+    "content:import-real": "node scripts/import-real-content.js",
+    "content:verify-real": "node scripts/verify-real-content.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "jose": "^5.10.0",
+    "ws": "^8.21.0"
+  }
+}

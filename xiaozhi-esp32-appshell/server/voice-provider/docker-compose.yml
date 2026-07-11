@@ -1,0 +1,57 @@
+# =============================================================================
+# docker-compose —— 自建语音入口 (Self_Hosted_Voice_Server)
+# Feature: selfhosted-voice-provider-page-agents / Task 5
+#
+# 部署对象: 开源 xinnan-tech/xiaozhi-esp32-server, 作为圆屏设备的
+#           可替换实时语音入口 (VAD -> ASR -> LLM -> TTS)。
+#           唯一"大脑"仍是 Family_Backend (Node.js @ 192.168.31.246:3100),
+#           本服务只做薄委托, 通过 family_agent_ask 插件把页面内请求 POST
+#           到后端的 /api/agent/ask。
+#
+# 用法:
+#   1. 在本目录 (server/voice-provider/) 下, 先按 DEPLOYMENT.md 准备好
+#      data/.config.yaml (从 data/.config.yaml.example 复制并填入真实密钥)。
+#   2. 在环境中导出 XIAOZHI_TOOL_TOKEN (务必与后端 server/.env 同名值一致)。
+#   3. 执行 ./deploy.sh (推荐, 带前置检查与健康检查) 或 docker compose up -d。
+#
+# !! 共享服务器高风险提示 !!
+#   - 192.168.31.246 上同时运行着家庭后端 family-hub(:3100) 与 mcp-bridge。
+#     本 compose 只新增 xiaozhi-server 容器, 绝不触碰 3100 端口相关的任何服务。
+#   - 端口 8000 / 8003 若与现有服务冲突, 只改本文件左侧的宿主机映射
+#     (例如 "18000:8000"), 并同步更新设备 OTA URL; 不要改容器内右侧端口,
+#     也不要为了腾端口去停别的服务。
+# =============================================================================
+
+services:
+  xiaozhi-esp32-server:
+    # Fixed 0.9.5 base plus the deterministic page-router extension.
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: xiaozhi-voice-provider:0.9.5-family-router3
+    container_name: xiaozhi-voice-provider
+    network_mode: host
+    security_opt:
+      - seccomp:unconfined
+    env_file:
+      - ./.voice-provider.env
+    volumes:
+      # 主配置目录 (含 .config.yaml、tmp/ 等)。路径以镜像实际布局为准,
+      # 单模块部署一般为 /opt/xiaozhi-esp32-server/data。
+      - ./data:/opt/xiaozhi-esp32-server/data
+      # family.agent.ask 本地插件 (只读挂载, 不修改镜像内其它插件)。
+      # server_latest 镜像的插件目录在 /opt/xiaozhi-esp32-server/plugins_func/functions/。
+      - ./plugins_func/functions/family_agent_ask.py:/opt/xiaozhi-esp32-server/plugins_func/functions/family_agent_ask.py:ro
+    environment:
+      # Family_Backend 基址; 插件拼接 /api/agent/ask (Req 4.2, 3.4)。
+      - FAMILY_BACKEND_URL=http://192.168.31.246:3100
+      - FAMILY_PAGE_ROUTER_ENABLED=1
+      - FAMILY_CONTEXT_TIMEOUT_MS=1000
+      - FAMILY_BACKEND_TIMEOUT_MS=2000
+      - FAMILY_TRACE_TIMEOUT_MS=800
+      - FAMILY_BACKEND_CIRCUIT_FAILURES=3
+      - FAMILY_BACKEND_CIRCUIT_COOLDOWN_MS=15000
+      - FAMILY_DEVICE_ID=esp32-185b
+      - FAMILY_LIGHTWEIGHT_MODEL=gpt-5.4-mini
+      - FAMILY_COMPLEX_MODEL=gpt-5.5
+    restart: unless-stopped

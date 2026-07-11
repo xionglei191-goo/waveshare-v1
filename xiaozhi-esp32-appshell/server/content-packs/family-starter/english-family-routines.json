@@ -1,0 +1,35 @@
+{
+  "title": "Family Routines",
+  "language": "en-US",
+  "ageRange": "6-12",
+  "prompt": "Tell Xiaozhi one thing you do with your family every day.",
+  "lessons": [
+    {
+      "id": "morning",
+      "title": "Good Morning",
+      "phrases": [
+        "Good morning, Mom.",
+        "Good morning, Dad.",
+        "I am ready for breakfast."
+      ]
+    },
+    {
+      "id": "helping",
+      "title": "Helping at Home",
+      "phrases": [
+        "I can set the table.",
+        "Let me help you.",
+        "Thank you for helping me."
+      ]
+    },
+    {
+      "id": "bedtime",
+      "title": "Bedtime",
+      "phrases": [
+        "I brushed my teeth.",
+        "Please read me a story.",
+        "Good night, everyone."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1273 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Family Hub Admin</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101417;
+      --surface: #171d21;
+      --surface-2: #20272c;
+      --surface-3: #263038;
+      --line: #344149;
+      --text: #eef4f1;
+      --muted: #9aabb1;
+      --good: #61d6a8;
+      --blue: #7fb0ff;
+      --warn: #f2c66a;
+      --bad: #ff8585;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(16, 20, 23, 0.96);
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 21px; font-weight: 760; }
+    h2 { font-size: 16px; font-weight: 720; }
+    h3 { font-size: 13px; font-weight: 720; color: var(--muted); }
+    button, input, select, textarea {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      color: var(--text);
+      font: inherit;
+      letter-spacing: 0;
+    }
+    button {
+      cursor: pointer;
+      padding: 0 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 8px 10px;
+    }
+    textarea { min-height: 82px; resize: vertical; }
+    code {
+      color: var(--blue);
+      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      overflow-wrap: anywhere;
+    }
+    pre {
+      margin: 0;
+      max-height: 420px;
+      overflow: auto;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0d1114;
+      color: var(--muted);
+      font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: pre-wrap;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 188px minmax(0, 1fr);
+      gap: 14px;
+      width: min(1240px, 100%);
+      margin: 0 auto;
+      padding: 14px;
+    }
+    nav {
+      position: sticky;
+      top: 68px;
+      align-self: start;
+      display: grid;
+      gap: 8px;
+    }
+    nav button {
+      width: 100%;
+      justify-content: flex-start;
+      text-align: left;
+      background: transparent;
+      color: var(--muted);
+    }
+    nav button.active {
+      color: var(--good);
+      border-color: #31745f;
+      background: #14241f;
+    }
+    .main { min-width: 0; }
+    .tab { display: none; }
+    .tab.active { display: grid; gap: 12px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 12px;
+    }
+    .wide { grid-column: 1 / -1; }
+    .metric {
+      margin-top: 6px;
+      font-size: 26px;
+      font-weight: 780;
+      color: var(--good);
+    }
+    .muted { color: var(--muted); }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 2px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: #10161a;
+      font-size: 12px;
+    }
+    .pill.good { color: var(--good); border-color: #31745f; }
+    .pill.warn { color: var(--warn); border-color: #806628; }
+    .pill.bad { color: var(--bad); border-color: #7a3636; }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .row > input, .row > select { min-width: 0; }
+    .row.wrap { flex-wrap: wrap; }
+    .stack { display: grid; gap: 8px; }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .list {
+      display: grid;
+      gap: 7px;
+      margin-top: 8px;
+    }
+    .item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 9px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 680;
+    }
+    .sub {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .primary { background: #15382f; border-color: #34866c; color: var(--good); }
+    .warn { background: #3a301c; border-color: #84692a; color: var(--warn); }
+    .danger { background: #3a2020; border-color: #7a3636; color: var(--bad); }
+    .ghost { background: transparent; }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: flex-end;
+      min-width: 0;
+    }
+    .notice {
+      min-height: 24px;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    @media (max-width: 880px) {
+      header { align-items: flex-start; flex-direction: column; }
+      .layout { grid-template-columns: 1fr; }
+      nav {
+        position: static;
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 2px;
+      }
+      nav button { width: auto; }
+      .grid, .grid.two { grid-template-columns: 1fr; }
+      .item { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Family Hub Admin</h1>
+      <p class="notice" id="subtitle">正在连接后端</p>
+    </div>
+    <div class="status">
+      <input id="adminToken" placeholder="管理 token" style="width:180px;min-height:34px">
+      <button id="saveToken" class="ghost">保存</button>
+      <span class="pill" id="backendStatus">--</span>
+      <button id="refresh" class="primary">刷新</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav>
+      <button class="active" data-tab="overview">总览</button>
+      <button data-tab="media">媒体库</button>
+      <button data-tab="devices">设备</button>
+      <button data-tab="family">家庭</button>
+      <button data-tab="tools">工具</button>
+      <button data-tab="content">内容</button>
+      <button data-tab="system">系统</button>
+    </nav>
+
+    <main class="main">
+      <section id="overview" class="tab active">
+        <div class="grid">
+          <article class="panel"><h2>后端</h2><div class="metric" id="ovBackend">--</div><p class="muted" id="ovBackendLine">--</p></article>
+          <article class="panel"><h2>设备</h2><div class="metric" id="ovDevices">0</div><p class="muted" id="ovDeviceLine">--</p></article>
+          <article class="panel"><h2>媒体</h2><div class="metric" id="ovMedia">0</div><p class="muted" id="ovMediaLine">--</p></article>
+          <article class="panel"><h2>内容</h2><div class="metric" id="ovContent">0</div><p class="muted" id="ovContentLine">--</p></article>
+          <article class="panel"><h2>命令队列</h2><div class="metric" id="ovCommands">0</div><p class="muted" id="ovCommandLine">--</p></article>
+          <article class="panel"><h2>安全</h2><div class="metric" id="ovDenied">0</div><p class="muted" id="ovSecurityLine">--</p></article>
+          <article class="panel"><h2>验收</h2><div class="metric" id="ovAcceptance">0/0</div><p class="muted" id="ovAcceptanceLine">--</p></article>
+        </div>
+        <article class="panel">
+          <div class="toolbar"><h2>最近反馈</h2><button id="openCompanion" class="ghost">伴侣页</button></div>
+          <div id="overviewFeed" class="list"></div>
+        </article>
+      </section>
+
+      <section id="media" class="tab">
+        <div class="grid two">
+          <article class="panel">
+            <div class="toolbar"><h2>搜索播放</h2><button id="mediaPlay" class="primary">播放</button></div>
+            <div class="stack">
+              <input id="mediaQuery" placeholder="标题、歌手、故事名或音频直链">
+              <div class="row">
+                <button id="mediaSearch">搜索</button>
+                <button id="mediaNext">下一首</button>
+                <button id="mediaResume">继续</button>
+                <button id="mediaStop" class="warn">停止</button>
+              </div>
+            </div>
+            <div id="mediaResults" class="list"></div>
+          </article>
+          <article class="panel">
+            <div class="toolbar"><h2>网络曲库</h2><button id="addCatalog" class="primary">保存</button></div>
+            <div class="stack">
+              <input id="catalogTitle" placeholder="标题">
+              <input id="catalogArtist" placeholder="作者/来源">
+              <input id="catalogUrl" placeholder="https://...mp3 / .ogg / .opus">
+            </div>
+            <div id="catalogList" class="list"></div>
+          </article>
+          <article class="panel">
+            <div class="toolbar"><h2>播客订阅</h2><div class="row"><button id="refreshAllFeeds">全刷</button><button id="addFeed" class="primary">添加</button></div></div>
+            <div class="stack">
+              <input id="feedTitle" placeholder="订阅名称，可选">
+              <input id="feedUrl" placeholder="https://.../podcast.xml">
+            </div>
+            <div id="feedList" class="list"></div>
+          </article>
+          <article class="panel">
+            <div class="toolbar"><h2>播放队列</h2><button id="playQueue" class="primary">播放队列</button></div>
+            <div class="row"><button id="queueNext">下一集</button><button id="queueClear">清空</button><button id="queueStop" class="warn">停止</button></div>
+            <div id="queueList" class="list"></div>
+          </article>
+          <article class="panel wide">
+            <div class="toolbar"><h2>服务器曲目</h2><span class="pill" id="mediaConfig">--</span></div>
+            <div id="trackList" class="list"></div>
+          </article>
+          <article class="panel wide">
+            <div class="toolbar"><h2>播客节目</h2><span class="pill" id="episodeCount">0</span></div>
+            <div id="episodeList" class="list"></div>
+          </article>
+          <article class="panel wide">
+            <div class="toolbar"><h2>收藏 / 历史</h2><span class="pill" id="favoriteCount">0</span></div>
+            <div id="favoriteList" class="list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="devices" class="tab">
+        <div class="grid two">
+          <article class="panel">
+            <div class="toolbar"><h2>设备列表</h2><button id="registerDevice" class="primary">注册圆屏</button></div>
+            <div id="deviceList" class="list"></div>
+          </article>
+          <article class="panel">
+            <div class="toolbar"><h2>诊断摘要</h2><button id="exportDiag">查看</button></div>
+            <pre id="deviceDiag">--</pre>
+          </article>
+          <article class="panel wide">
+            <div class="toolbar"><h2>设备日志</h2><span class="pill" id="logCount">0</span></div>
+            <div id="deviceLogs" class="list"></div>
+          </article>
+          <article class="panel wide">
+            <div class="toolbar"><h2>AI 链路追踪</h2><span class="pill" id="traceCount">0</span></div>
+            <p class="notice">默认只保存阶段、耗时和路由结果，不保存原始语音或完整对话。</p>
+            <div id="aiTraceList" class="list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="family" class="tab">
+        <div class="grid two">
+          <article class="panel">
+            <div class="toolbar"><h2>家庭成员</h2><button id="saveMember" class="primary">保存</button></div>
+            <div class="stack">
+              <div class="row">
+                <input id="memberId" placeholder="id，例如 child">
+                <input id="memberName" placeholder="昵称">
+              </div>
+              <div class="row">
+                <select id="memberRole">
+                  <option value="parent">parent</option>
+                  <option value="child">child</option>
+                  <option value="guest">guest</option>
+                  <option value="member">member</option>
+                </select>
+                <input id="memberStatus" placeholder="状态，例如 home / learning">
+              </div>
+              <div class="row">
+                <input id="memberPreferredName" placeholder="希望被称呼">
+                <input id="memberAgeGroup" placeholder="年龄阶段，例如 child / adult">
+              </div>
+              <div class="row">
+                <input id="memberInterests" placeholder="兴趣，逗号分隔">
+                <input id="memberAvoidTopics" placeholder="避免话题，逗号分隔">
+              </div>
+              <div class="row">
+                <input id="memberAssistantName" placeholder="助手称呼，例如 小智">
+                <select id="memberVerbosity">
+                  <option value="brief">简洁</option>
+                  <option value="balanced">均衡</option>
+                  <option value="detailed">详细</option>
+                </select>
+              </div>
+              <input id="memberTone" placeholder="交流语气，例如 温暖、耐心、鼓励">
+              <input id="memberTraits" placeholder="性格特征，逗号分隔">
+              <textarea id="memberInstructions" placeholder="个性化指令"></textarea>
+              <div class="row">
+                <input id="memberMemoryLimit" type="number" min="1" max="20" value="8" placeholder="上下文记忆条数">
+                <input id="memberRetentionDays" type="number" min="1" max="3650" value="365" placeholder="保留天数">
+              </div>
+              <label class="row"><input id="memberMemoryEnabled" type="checkbox" checked style="width:auto">启用该成员的长期记忆</label>
+            </div>
+            <div id="memberList" class="list"></div>
+          </article>
+          <article class="panel">
+            <div class="toolbar"><h2>权限策略</h2><button id="savePolicy" class="primary">保存</button></div>
+            <div class="stack">
+              <select id="policyModeSelect"></select>
+              <div id="policyEditor" class="grid two"></div>
+            </div>
+          </article>
+          <article class="panel wide">
+            <div class="toolbar"><h2>权限说明</h2><span class="pill" id="familyMode">--</span></div>
+            <div class="list">
+              <div class="item"><div><div class="title">当前用户</div><div class="sub">默认模式对应家长档案，儿童模式对应孩子档案，访客模式对应临时访客。</div></div></div>
+              <div class="item"><div><div class="title">安全边界</div><div class="sub">儿童、访客默认限制 OpenClaw 和 Home Assistant；拒绝记录会进入安全审计。</div></div></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="tools" class="tab">
+        <div class="grid two">
+          <article class="panel">
+            <h2>家庭模式</h2>
+            <div class="row wrap" style="margin-top:10px">
+              <button data-mode="默认">默认</button>
+              <button data-mode="儿童">儿童</button>
+              <button data-mode="访客">访客</button>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="toolbar"><h2>AI 意图</h2><button id="sendIntent" class="primary">发送</button></div>
+            <div class="stack">
+              <input id="intentText" value="播放服务器播客">
+              <div class="row"><button id="toastTest">提示</button><button id="haScene">HA 场景</button></div>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="toolbar"><h2>OpenClaw</h2><button id="runOpenclaw" class="primary">运行</button></div>
+            <select id="openclawTarget"></select>
+            <div id="openclawJobs" class="list"></div>
+          </article>
+          <article class="panel">
+            <div class="toolbar"><h2>安全审计</h2><span class="pill" id="policyMode">--</span></div>
+            <div id="auditList" class="list"></div>
+          </article>
+          <article class="panel wide">
+            <div class="toolbar"><h2>访问令牌</h2><button id="createToken" class="primary">创建</button></div>
+            <div class="row"><input id="tokenName" placeholder="令牌名称"><select id="tokenKind"><option value="device">设备</option><option value="agent">Agent</option><option value="content">内容</option><option value="admin">管理</option></select></div>
+            <div id="tokenList" class="list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="content" class="tab">
+        <div class="grid two">
+          <article class="panel">
+            <div class="toolbar"><h2>资源上传</h2><button id="uploadResource" class="primary">上传</button></div>
+            <div class="stack">
+              <input id="resourceFile" type="file">
+              <div class="row"><input id="resourcePath" placeholder="music/server/demo.mp3"><button id="autoPath">自动</button></div>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="toolbar"><h2>内容包</h2><button id="seedContent" class="primary">生成示例</button></div>
+            <div class="stack">
+              <div class="row">
+                <select id="contentType">
+                  <option value="album">相册</option>
+                  <option value="podcast">播客</option>
+                  <option value="english">英语</option>
+                  <option value="story">故事</option>
+                  <option value="game">小游戏</option>
+                </select>
+                <input id="contentTitle" placeholder="内容标题">
+              </div>
+              <div class="row"><button id="importContentFile" class="primary">导入内容</button><button id="importStory">导入故事</button><button id="recommendContent">推荐内容</button></div>
+            </div>
+            <div id="packList" class="list"></div>
+          </article>
+          <article class="panel">
+            <div class="toolbar"><h2>家庭记忆</h2><button id="saveMemory" class="primary">保存</button></div>
+            <textarea id="memoryText">孩子喜欢温柔的睡前故事</textarea>
+            <div id="memoryList" class="list"></div>
+          </article>
+          <article class="panel">
+            <div class="toolbar"><h2>资源文件</h2><span class="pill" id="resourceCount">0</span></div>
+            <div id="resourceList" class="list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="system" class="tab">
+        <div class="grid two">
+          <article class="panel">
+            <div class="toolbar"><h2>运行配置</h2><span class="pill" id="storeDriver">--</span></div>
+            <pre id="configView">--</pre>
+          </article>
+          <article class="panel">
+            <div class="toolbar"><h2>诊断报告</h2><button id="reloadDiag">刷新</button></div>
+            <pre id="diagView">--</pre>
+          </article>
+          <article class="panel wide">
+            <div class="toolbar">
+              <h2>外部验收</h2>
+              <div class="row">
+                <button id="fillAcceptanceDraft">填入草稿</button>
+                <button id="downloadAcceptancePack">下载证据包</button>
+                <button id="saveAcceptance" class="primary">记录证据</button>
+              </div>
+            </div>
+            <p class="notice">只在真实手机、真实 HA、真实素材或真实 OpenClaw target 验证后记录；不要写入密码、token 或家庭隐私。</p>
+            <div class="row" style="margin-bottom:8px">
+              <select id="acceptanceId"></select>
+              <select id="acceptanceStatus">
+                <option value="pending">pending</option>
+                <option value="passed">passed</option>
+                <option value="failed">failed</option>
+                <option value="blocked">blocked</option>
+              </select>
+            </div>
+            <textarea id="acceptanceNote" placeholder="证据摘要：设备/服务、观察时间、实际结果、相关 job 或日志"></textarea>
+            <input id="acceptanceReference" placeholder="证据引用：截图路径、日志 id、HA 实体或 job id">
+            <textarea id="acceptanceData" placeholder='结构化 data JSON，可选，例如 {"jobId":"...","ssid":"..."}'></textarea>
+            <div id="acceptanceList" class="list"></div>
+          </article>
+          <article class="panel wide">
+            <div class="toolbar"><h2>Remote UI 预览</h2><button id="previewUi">预览</button></div>
+            <div class="row" style="margin-bottom:8px">
+              <select id="previewPage">
+                <option value="home">home</option>
+                <option value="apps">apps</option>
+                <option value="english">english</option>
+                <option value="album">album</option>
+                <option value="settings">settings</option>
+              </select>
+            </div>
+            <pre id="uiPreview">--</pre>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const state = { summary: null, config: null, media: null, diagnostics: null, metrics: null, dashboard: null, family: null, tokens: null, aiTraces: null, acceptancePack: null };
+    const policyLabels = {
+      ai: "AI",
+      music: "音乐",
+      learning: "学习",
+      apps: "应用",
+      schedule: "日程",
+      screensaver: "屏保",
+      notifications: "通知",
+      openclaw: "OpenClaw",
+      homeControl: "家庭控制",
+      family: "家庭资料",
+      voice: "语音",
+      diagnostics: "诊断",
+      quiet: "安静模式"
+    };
+
+    function text(value, fallback = "--") {
+      return value === undefined || value === null || value === "" ? fallback : String(value);
+    }
+    function esc(value) {
+      return text(value, "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[ch]));
+    }
+    function json(value) {
+      return JSON.stringify(value, null, 2);
+    }
+    function fmtSec(value) {
+      const sec = Math.max(0, Math.floor(Number(value || 0)));
+      const m = Math.floor(sec / 60);
+      const s = String(sec % 60).padStart(2, "0");
+      return `${m}:${s}`;
+    }
+    function progressLine(progress) {
+      if (!progress) return "未播放";
+      if (progress.completed) return `已听完 | ${esc(progress.updatedAt || "")}`;
+      if (progress.positionSec > 0) return `进度 ${fmtSec(progress.positionSec)} / ${progress.durationSec ? fmtSec(progress.durationSec) : "--"} | ${progress.percent || 0}%`;
+      return "未播放";
+    }
+    function toast(message, bad = false) {
+      $("subtitle").textContent = message;
+      $("backendStatus").textContent = bad ? "error" : "online";
+      $("backendStatus").className = `pill ${bad ? "bad" : "good"}`;
+    }
+    function downloadJsonFile(filename, value) {
+      const blob = new Blob([json(value)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+    async function api(path, options = {}) {
+      const token = $("adminToken")?.value || localStorage.getItem("familyHubAdminToken") || "";
+      const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(path, { ...options, headers });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body.ok) throw new Error(body.error || res.statusText);
+      return body.data;
+    }
+    async function action(name, params = {}) {
+      return api("/api/action", {
+        method: "POST",
+        body: JSON.stringify({ type: "action.call", name, params: { ...params, role: "parent" } })
+      });
+    }
+    function renderList(id, items, empty = "暂无数据") {
+      const node = $(id);
+      node.innerHTML = "";
+      if (!items || !items.length) {
+        node.innerHTML = `<div class="item"><div class="muted">${esc(empty)}</div></div>`;
+        return;
+      }
+      for (const html of items) {
+        const div = document.createElement("div");
+        div.className = "item";
+        div.innerHTML = html;
+        node.appendChild(div);
+      }
+    }
+    function pathUrl(path) {
+      return String(path || "").split("/").map(encodeURIComponent).join("/");
+    }
+    function parseOptionalJson(id) {
+      const raw = $(id).value.trim();
+      if (!raw) return {};
+      return JSON.parse(raw);
+    }
+    function resourceDefaultPath(file, contentType = "") {
+      const name = (file?.name || `resource-${Date.now()}`).replace(/[^\w.\-() ]+/g, "_");
+      const ext = name.split(".").pop().toLowerCase();
+      const type = String(contentType || "").toLowerCase();
+      if (type === "album") return `images/${name}`;
+      if (type === "podcast") return `music/server/${name}`;
+      if (type === "english") return `courses/english/${name}`;
+      if (type === "game") return `games/${name}`;
+      if (type === "story") return `courses/stories/${name}`;
+      if (["jpg", "jpeg", "png", "bin"].includes(ext)) return `images/${name}`;
+      if (["ogg", "opus", "mp3"].includes(ext)) return `music/server/${name}`;
+      if (ext === "json") return `courses/stories/${name}`;
+      return `cache/${name}`;
+    }
+    function arrayBufferToBase64(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+      }
+      return btoa(binary);
+    }
+
+    async function loadAll() {
+      const [summary, config, media, diagnostics, metrics, dashboard, policy, catalog, memory, integrations, jobs, manifest, family, tokens, aiTraces] = await Promise.all([
+        api("/api/device/summary"),
+        api("/api/admin/config"),
+        api("/api/admin/media"),
+        api("/api/diagnostics/report"),
+        api("/api/admin/metrics"),
+        api("/api/admin/dashboard"),
+        api("/api/family/policies"),
+        api("/api/content/catalog"),
+        api("/api/memory"),
+        api("/api/integrations/status"),
+        api("/api/openclaw/jobs"),
+        api("/api/resources/manifest"),
+        api("/api/admin/family"),
+        api("/api/admin/tokens"),
+        api("/api/admin/ai/traces?limit=40")
+      ]);
+      let acceptancePack = null;
+      try {
+        acceptancePack = await api("/api/admin/acceptance/evidence-pack");
+      } catch (error) {
+        acceptancePack = { error: error.message, nextActions: {} };
+      }
+      Object.assign(state, { summary, config, media, diagnostics, metrics, dashboard, policy, catalog, memory, integrations, jobs, manifest, family, tokens, aiTraces, acceptancePack });
+      render();
+      toast(`${summary.backend.publicBaseUrl} | ${new Date(summary.serverTime).toLocaleString()}`);
+    }
+
+    function render() {
+      const s = state.summary;
+      const d = state.diagnostics;
+      const m = state.media;
+      const dash = state.dashboard;
+      $("ovBackend").textContent = s.backend.version;
+      $("ovBackendLine").textContent = `${state.config.host}:${state.config.port} | ${state.config.storeDriver}`;
+      $("ovDevices").textContent = s.devices.count;
+      $("ovDeviceLine").textContent = s.devices.recent[0]?.profile || "--";
+      $("ovMedia").textContent = m.tracks.length;
+      $("ovMediaLine").textContent = `${m.localCount} 本地 | ${m.onlineTracks.length} 网络`;
+      $("ovContent").textContent = s.content.catalogCount;
+      $("ovContentLine").textContent = `${s.content.packCount} 个资源包`;
+      $("ovCommands").textContent = d.commandStatus.stats.created || 0;
+      $("ovCommandLine").textContent = `${d.commandStatus.pending.length} pending | ${d.commandStatus.stats.acked || 0} ack`;
+      $("ovDenied").textContent = state.policy.deniedCount || 0;
+      $("ovSecurityLine").textContent = `${state.policy.mode} 模式`;
+      const acceptanceCounts = d.acceptanceStatus?.counts || { total: 0, passed: 0, pending: 0, failed: 0, blocked: 0 };
+      $("ovAcceptance").textContent = `${acceptanceCounts.passed}/${acceptanceCounts.total}`;
+      $("ovAcceptanceLine").textContent = `${acceptanceCounts.pending} pending | ${acceptanceCounts.failed} failed | ${acceptanceCounts.blocked} blocked`;
+      $("mediaConfig").textContent = state.config.onlineMedia.providers.join(",") || "local";
+      $("storeDriver").textContent = state.config.storeDriver;
+      $("policyMode").textContent = state.policy.mode;
+      $("logCount").textContent = dash.logs.count;
+      $("resourceCount").textContent = (state.manifest.packs || []).reduce((sum, pack) => sum + (pack.files || []).length, 0);
+      $("episodeCount").textContent = state.media.counts?.podcastEpisodes || 0;
+      $("favoriteCount").textContent = state.media.counts?.favorites || 0;
+      $("traceCount").textContent = state.aiTraces?.traces?.length || 0;
+
+      renderList("overviewFeed", [
+        ...(s.notifications || []).slice(0, 4).map((n) => `<div><div class="title">${esc(n.title)}</div><div class="sub">${esc(n.message)}</div></div><span class="pill ${n.level === "warn" ? "warn" : "good"}">${esc(n.level)}</span>`),
+        ...(dash.logs.recent || []).slice(0, 4).map((log) => `<div><div class="title">${esc(log.message || log.source)}</div><div class="sub">${esc(log.source)} ${esc(log.at)}</div></div><code>${esc(log.level)}</code>`)
+      ]);
+      renderTracks();
+      renderCatalog();
+      renderPodcasts();
+      renderQueue();
+      renderDevices();
+      renderAiTraces();
+      renderFamily();
+      renderTools();
+      renderContent();
+      renderAcceptance();
+      $("configView").textContent = json(state.config);
+      $("diagView").textContent = json({
+        backend: d.backend,
+        integrationStatus: d.integrationStatus,
+        eventStatus: d.eventStatus,
+        commandStatus: d.commandStatus,
+        resourceStatus: d.resourceStatus,
+        esp32Status: d.esp32Status,
+        acceptanceStatus: d.acceptanceStatus
+      });
+      $("deviceDiag").textContent = json({
+        esp32: d.esp32Status,
+        event: d.eventStatus.latest,
+        command: d.commandStatus.pending[0] || null,
+        backend: d.backend,
+        metrics: state.metrics
+      });
+    }
+
+    function renderTracks(items = state.media.tracks) {
+      renderList("trackList", (items || []).slice(0, 80).map((track) =>
+        `<div><div class="title">${esc(track.title)}</div><div class="sub">${esc(track.artist)} | ${esc(track.source || track.origin || "local")} | ${esc(track.format)} | ${esc(track.path)}</div><div class="sub">${progressLine(track.progress)}</div></div><div class="row wrap"><button data-play-track="${esc(track.id)}" class="primary">播放</button><button data-queue-track="${esc(track.id)}">入队</button><button data-fav-track="${esc(track.id)}">收藏</button><button data-complete-progress="${esc(track.id)}">标已听</button>${track.progress ? `<button data-reset-progress="${esc(track.id)}">重置</button>` : ""}${track.origin === "online" ? "" : `<button data-rename-track="${esc(track.id)}" data-track-title="${esc(track.title)}">改名</button><button data-delete-track="${esc(track.id)}" class="danger">删除</button>`}</div>`
+      ), "暂无曲目");
+    }
+    function renderCatalog() {
+      renderList("catalogList", (state.media.onlineCatalog || []).slice(0, 40).map((item) =>
+        `<div><div class="title">${esc(item.title)}</div><div class="sub">${esc(item.artist)} | ${esc(item.remoteUrl)}</div></div><button data-delete-catalog="${esc(item.id)}" class="danger">删除</button>`
+      ), "暂无网络曲库");
+    }
+    function renderPodcasts() {
+      renderList("feedList", (state.media.podcastFeeds || []).slice(0, 40).map((feed) =>
+        `<div><div class="title">${esc(feed.title)}</div><div class="sub">${esc(feed.enabled ? "启用" : "停用")} | ${feed.episodeCount || 0} 集 | ${esc(feed.lastRefreshAt || "未刷新")} ${feed.refreshError ? `| ${esc(feed.refreshError)}` : ""}</div></div><div class="row wrap"><button data-refresh-feed="${esc(feed.id)}">刷新</button><button data-toggle-feed="${esc(feed.id)}" data-feed-enabled="${feed.enabled ? "1" : "0"}">${feed.enabled ? "停用" : "启用"}</button><button data-delete-feed="${esc(feed.id)}" class="danger">删除</button></div>`
+      ), "暂无订阅源");
+      renderList("episodeList", (state.media.podcastEpisodes || []).slice(0, 80).map((episode) =>
+        `<div><div class="title">${esc(episode.title)}</div><div class="sub">${esc(episode.artist)} | ${esc(episode.source)} | ${esc(episode.publishedAt)} | ${esc(episode.format)}</div><div class="sub">${progressLine(episode.progress)}</div></div><div class="row wrap"><button data-play-track="${esc(episode.id)}" class="primary">播放</button><button data-queue-track="${esc(episode.id)}">入队</button><button data-fav-track="${esc(episode.id)}">收藏</button><button data-complete-progress="${esc(episode.id)}">标已听</button>${episode.progress ? `<button data-reset-progress="${esc(episode.id)}">重置</button>` : ""}</div>`
+      ), "暂无节目，先添加并刷新 RSS 订阅");
+    }
+    function renderQueue() {
+      const queue = state.media.queue || { items: [] };
+      renderList("queueList", (queue.items || []).slice(0, 60).map((item) =>
+        `<div><div class="title">${esc(item.title)}</div><div class="sub">${esc(item.status)} | ${esc(item.source)} | ${esc(item.addedAt)}</div></div><div class="row wrap"><button data-play-queue="${esc(item.id)}" class="primary">播放</button><button data-move-queue="${esc(item.id)}" data-queue-direction="up">上移</button><button data-move-queue="${esc(item.id)}" data-queue-direction="down">下移</button><button data-remove-queue="${esc(item.id)}" class="danger">移除</button></div>`
+      ), "暂无队列");
+      const favorites = state.media.favorites || [];
+      const history = state.media.playbackHistory || [];
+      const resumes = state.media.resumeCandidates || [];
+      renderList("favoriteList", [
+        ...resumes.slice(0, 12).map((item) => `<div><div class="title">${esc(item.title)}</div><div class="sub">未听完 | ${fmtSec(item.positionSec)} / ${item.durationSec ? fmtSec(item.durationSec) : "--"} | ${item.percent || 0}% | ${esc(item.updatedAt)}</div></div><div class="row wrap"><button data-resume-track="${esc(item.trackId)}" class="primary">继续</button><button data-play-track="${esc(item.trackId)}">重播</button></div>`),
+        ...favorites.slice(0, 30).map((item) => `<div><div class="title">${esc(item.title)}</div><div class="sub">收藏 | ${esc(item.artist)} | ${esc(item.source)}</div></div><div class="row wrap"><button data-play-track="${esc(item.trackId)}" class="primary">播放</button><button data-delete-favorite="${esc(item.id)}" class="danger">删除</button></div>`),
+        ...history.slice(0, 20).map((item) => `<div><div class="title">${esc(item.title)}</div><div class="sub">历史 | ${esc(item.artist)} | ${esc(item.playedAt)}</div></div><button data-play-track="${esc(item.trackId)}">重播</button>`)
+      ], "暂无收藏或历史");
+    }
+    function renderDevices() {
+      renderList("deviceList", (state.dashboard.devices.items || []).map((dev) =>
+        `<div><div class="title">${esc(dev.name || dev.id)}</div><div class="sub">${esc(dev.profile)} | ${esc(dev.ip)} | ${esc(dev.lastSeenAt)} | ${esc(dev.health || "unknown")}</div></div><div class="row"><code>${esc(dev.firmwareBuild || dev.firmware || "--")}</code><button data-device-diagnostics="${esc(dev.id)}">诊断</button></div>`
+      ), "暂无设备");
+      renderList("deviceLogs", (state.dashboard.logs.recent || []).map((log) =>
+        `<div><div class="title">${esc(log.message || log.source)}</div><div class="sub">${esc(log.deviceId)} | ${esc(log.at)}</div></div><code>${esc(log.level)}</code>`
+      ), "暂无日志");
+    }
+
+    function renderAiTraces() {
+      renderList("aiTraceList", (state.aiTraces?.traces || []).map((trace) => {
+        const timings = Object.entries(trace.timings || {}).map(([key, value]) => `${key}=${value}ms`).join(" · ");
+        const route = [trace.page, trace.agent, trace.intent].filter(Boolean).join(" → ") || "未路由";
+        const model = trace.modelName ? ` · ${trace.modelTier || "model"}/${trace.modelName}` : "";
+        const error = trace.errorType ? ` · ${trace.errorType}` : "";
+        return `<div><div class="title">${esc(route)}</div><div class="sub">${esc(trace.traceId)} · ${esc(trace.stage)} · ${esc(trace.status)}${esc(model)}${esc(error)}<br>${esc(timings || "暂无耗时")}</div></div><span class="pill ${trace.status === "failed" ? "bad" : trace.status === "fallback" ? "warn" : "good"}">${esc(trace.status)}</span>`;
+      }), "暂无 AI 链路记录");
+    }
+    function renderFamily() {
+      const family = state.family || {};
+      const members = family.members || [];
+      const policies = family.policies?.policies || {};
+      const mode = family.mode || family.policies?.mode || state.policy?.mode || "--";
+      const activeMembers = family.activeMembers || {};
+      const activeMemberId = family.activeMemberId || activeMembers[mode] || "";
+      $("familyMode").textContent = activeMemberId ? `${mode} / ${activeMemberId}` : mode;
+      renderList("memberList", members.map((member) =>
+        `<div><div class="title">${esc(member.name || member.id)}</div><div class="sub">${esc(member.id)} | ${esc(member.relationship || member.role)} | ${esc(member.status)} | v${esc(member.profileVersion || 1)} | ${esc(member.persona?.tone || "默认语气")} | 记忆 ${esc(member.memoryPolicy?.maxContextItems || 8)} 条</div></div><div class="row wrap"><button data-active-member="${esc(member.id)}" ${member.archivedAt ? "disabled" : ""}>设为当前</button><button data-view-member-context="${esc(member.id)}">上下文</button><button data-export-member="${esc(member.id)}">导出</button><button data-edit-member="${esc(member.id)}">编辑</button>${!["parent", "child", "guest"].includes(member.id) && !member.archivedAt ? `<button data-archive-member="${esc(member.id)}">归档</button>` : ""}${!["parent", "child", "guest"].includes(member.id) ? `<button data-delete-member="${esc(member.id)}" class="danger">删除</button>` : ""}</div>`
+      ), "暂无成员");
+      const modes = ["默认", "儿童", "访客"].filter((item) => policies[item]);
+      $("policyModeSelect").innerHTML = modes.map((item) => `<option value="${esc(item)}">${esc(item)}</option>`).join("");
+      const selected = $("policyModeSelect").value || mode || modes[0] || "默认";
+      if (selected && $("policyModeSelect").value !== selected) $("policyModeSelect").value = selected;
+      renderPolicyEditor();
+    }
+    function renderPolicyEditor() {
+      const policies = state.family?.policies?.policies || {};
+      const selected = $("policyModeSelect").value || Object.keys(policies)[0] || "默认";
+      const policy = policies[selected] || {};
+      $("policyEditor").innerHTML = Object.keys(policyLabels).map((key) => `
+        <label class="row" style="justify-content:space-between;border-top:1px solid rgba(255,255,255,.06);padding:6px 0">
+          <span>${esc(policyLabels[key])}</span>
+          <input data-policy-key="${esc(key)}" type="checkbox" ${policy[key] !== false ? "checked" : ""} style="width:auto;min-height:auto">
+        </label>
+      `).join("");
+    }
+    function renderTools() {
+      const targets = state.integrations.openclaw.allowedTargets || [];
+      $("openclawTarget").innerHTML = targets.map((target) => `<option value="${esc(target)}">${esc(target)}</option>`).join("");
+      renderList("openclawJobs", (state.jobs.jobs || []).slice(0, 12).map((job) =>
+        `<div><div class="title">${esc(job.target)} ${esc(job.status)}</div><div class="sub">${esc(job.message || "")}</div></div><code>${esc(job.exitCode ?? "--")} ${esc(job.durationMs || 0)}ms</code>`
+      ), "暂无 OpenClaw 任务");
+      renderList("auditList", (state.policy.recentAudit || []).slice(0, 14).map((item) =>
+        `<div><div class="title">${esc(item.action)} ${esc(item.status)}</div><div class="sub">${esc(item.reason)} | ${esc(item.at)}</div></div><code>${esc(item.mode)}</code>`
+      ), "暂无审计");
+      renderList("tokenList", (state.tokens?.tokens || []).map((item) =>
+        `<div><div class="title">${esc(item.name)} · ${esc(item.kind)}</div><div class="sub">${esc((item.scopes || []).join(", "))} | 最近使用 ${esc(item.lastUsedAt || "从未")} ${item.revokedAt ? `| 已撤销 ${esc(item.revokedAt)}` : ""}</div></div><div class="row">${item.revokedAt ? "" : `<button data-rotate-token="${esc(item.id)}">轮换</button><button data-revoke-token="${esc(item.id)}" class="danger">撤销</button>`}</div>`
+      ), "暂无受管令牌");
+    }
+    function renderContent() {
+      renderList("packList", (state.catalog.catalog || []).slice(0, 18).map((item) =>
+        `<div><div class="title">${esc(item.title)}</div><div class="sub">${esc(item.type)} | ${esc(item.packId)} | ${esc(item.path)}</div></div><code>${esc(item.language)}</code>`
+      ), "暂无内容");
+      renderList("memoryList", (state.memory.items || []).slice(0, 12).map((item) =>
+        `<div><div class="title">${esc(item.title)}</div><div class="sub">${esc(item.memberId)} | ${esc(item.visibility)} | ${esc(item.source || "manual")} | 到期 ${esc(item.expiresAt || "长期")}</div></div><div class="row"><button data-edit-memory="${esc(item.id)}">修改</button><button data-delete-memory="${esc(item.id)}" class="danger">删除</button></div>`
+      ), "暂无记忆");
+      const files = (state.manifest.packs || []).flatMap((pack) => (pack.files || []).map((file) => ({ ...file, packId: pack.id })));
+      renderList("resourceList", files.slice(0, 60).map((file) =>
+        `<div><div class="title">${esc(file.path)}</div><div class="sub">${esc(file.contentType)} | ${file.size} bytes | ${esc(file.packId)}</div></div><button data-delete-resource="${esc(file.path)}" class="danger">删除</button>`
+      ), "暂无资源文件");
+    }
+    function renderAcceptance() {
+      const acceptance = state.diagnostics?.acceptanceStatus || { items: [] };
+      const readiness = state.diagnostics?.acceptanceReadiness || { items: [] };
+      const nextActionsById = state.acceptancePack?.nextActions || {};
+      const readinessById = Object.fromEntries((readiness.items || []).map((item) => [item.id, item]));
+      const items = acceptance.items || [];
+      const current = $("acceptanceId").value;
+      $("acceptanceId").innerHTML = items.map((item) => `<option value="${esc(item.id)}">${esc(item.phase)} ${esc(item.title)}</option>`).join("");
+      if (current && items.some((item) => item.id === current)) {
+        $("acceptanceId").value = current;
+      }
+      renderList("acceptanceList", items.map((item) => {
+        const cls = item.status === "passed" ? "good" : item.status === "failed" ? "bad" : item.status === "blocked" ? "warn" : "";
+        const latest = item.latestEvidence ? `最新: ${esc(item.latestEvidence.status)} | ${esc(item.latestEvidence.at)} | ${esc(item.latestEvidence.note || "")}` : "暂无证据";
+        const required = (item.evidenceRequired || []).map((entry) => `- ${esc(entry)}`).join("<br>");
+        const ready = readinessById[item.id] || { status: "missing", okCount: 0, total: 0, checks: [] };
+        const readyCls = ready.status === "ready" ? "good" : ready.status === "partial" ? "warn" : "bad";
+        const checks = (ready.checks || []).map((check) =>
+          `${check.ok ? "✓" : "×"} ${esc(check.label)} <span class="sub">${esc(check.detail || "")}</span>`
+        ).join("<br>");
+        const actions = (nextActionsById[item.id] || []).slice(0, 6).map((action) =>
+          `→ ${esc(action.text || action)}`
+        ).join("<br>") || `输入管理 token 后可查看下一步${state.acceptancePack?.error ? `：${esc(state.acceptancePack.error)}` : ""}`;
+        return `<div><div class="title">${esc(item.title)}</div><div class="sub">${esc(item.requirement)}</div><div class="sub">${required}</div><div class="sub">${latest}</div><div class="sub">${checks}</div><div class="sub"><b>下一步</b><br>${actions}</div></div><span class="pill ${cls}">${esc(item.status)} ${item.evidenceCount || 0}</span><span class="pill ${readyCls}">ready ${ready.okCount}/${ready.total}</span>`;
+      }), "暂无验收项");
+    }
+
+    document.querySelectorAll("nav button").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll("nav button,.tab").forEach((node) => node.classList.remove("active"));
+        button.classList.add("active");
+        $(button.dataset.tab).classList.add("active");
+      });
+    });
+    $("adminToken").value = localStorage.getItem("familyHubAdminToken") || "";
+    $("saveToken").addEventListener("click", () => {
+      localStorage.setItem("familyHubAdminToken", $("adminToken").value.trim());
+      toast("管理 token 已保存在当前浏览器");
+    });
+    $("refresh").addEventListener("click", () => loadAll().catch((error) => toast(error.message, true)));
+    $("openCompanion").addEventListener("click", () => { location.href = "/companion"; });
+    $("mediaSearch").addEventListener("click", async () => {
+      const q = encodeURIComponent($("mediaQuery").value);
+      const data = await api(`/api/media/search?q=${q}`);
+      renderTracks(data.tracks || []);
+      $("mediaResults").innerHTML = `<div class="item"><div><div class="title">搜索来源 ${esc(data.source)}</div><div class="sub">${esc(data.query)} | ${(data.tracks || []).length} 项</div></div></div>`;
+    });
+    $("mediaPlay").addEventListener("click", async () => {
+      await api("/api/admin/media/command", {
+        method: "POST",
+        body: JSON.stringify({ tool: "family.media.play", text: $("mediaQuery").value, query: $("mediaQuery").value, deviceId: "esp32-185b" })
+      });
+      await loadAll();
+    });
+    $("mediaResume").addEventListener("click", async () => { await api("/api/media/resume", { method: "POST", body: JSON.stringify({ deviceId: "esp32-185b" }) }); await loadAll(); });
+    $("mediaNext").addEventListener("click", async () => { await api("/api/admin/media/command", { method: "POST", body: JSON.stringify({ tool: "family.podcast.next", deviceId: "esp32-185b" }) }); await loadAll(); });
+    $("mediaStop").addEventListener("click", async () => { await api("/api/admin/media/command", { method: "POST", body: JSON.stringify({ tool: "family.podcast.stop", deviceId: "esp32-185b" }) }); await loadAll(); });
+    $("playQueue").addEventListener("click", async () => { await api("/api/media/queue/play", { method: "POST", body: JSON.stringify({ deviceId: "esp32-185b" }) }); await loadAll(); });
+    $("queueNext").addEventListener("click", async () => { await api("/api/media/queue/next", { method: "POST", body: JSON.stringify({ deviceId: "esp32-185b" }) }); await loadAll(); });
+    $("queueClear").addEventListener("click", async () => {
+      if (confirm("确认清空播放队列？")) {
+        await api("/api/media/queue/clear", { method: "POST", body: JSON.stringify({}) });
+        await loadAll();
+      }
+    });
+    $("queueStop").addEventListener("click", async () => { await api("/api/media/queue/stop", { method: "POST", body: JSON.stringify({ deviceId: "esp32-185b" }) }); await loadAll(); });
+    $("addCatalog").addEventListener("click", async () => {
+      await api("/api/admin/media/catalog", {
+        method: "POST",
+        body: JSON.stringify({ title: $("catalogTitle").value, artist: $("catalogArtist").value, remoteUrl: $("catalogUrl").value })
+      });
+      $("catalogTitle").value = ""; $("catalogArtist").value = ""; $("catalogUrl").value = "";
+      await loadAll();
+    });
+    $("addFeed").addEventListener("click", async () => {
+      await api("/api/admin/podcasts/feeds", {
+        method: "POST",
+        body: JSON.stringify({ title: $("feedTitle").value, url: $("feedUrl").value })
+      });
+      $("feedTitle").value = "";
+      $("feedUrl").value = "";
+      await loadAll();
+    });
+    $("refreshAllFeeds").addEventListener("click", async () => {
+      await api("/api/admin/podcasts/refresh-all", { method: "POST", body: JSON.stringify({ force: true }) });
+      await loadAll();
+    });
+    $("registerDevice").addEventListener("click", async () => {
+      await api("/api/devices/register", { method: "POST", body: JSON.stringify({ id: "waveshare-1.85b-main", name: "家庭圆屏", profile: "waveshare-esp32-s3-touch-lcd-1.85b", firmware: "2.2.6", room: "home" }) });
+      await loadAll();
+    });
+    $("exportDiag").addEventListener("click", () => { $("deviceDiag").textContent = json(state.diagnostics); });
+    document.querySelectorAll("[data-mode]").forEach((button) => {
+      button.addEventListener("click", async () => { await action("family.mode", { mode: button.dataset.mode }); await loadAll(); });
+    });
+    $("saveMember").addEventListener("click", async () => {
+      const list = (value) => value.split(/[,，]/).map((item) => item.trim()).filter(Boolean);
+      await api("/api/admin/family/members", {
+        method: "POST",
+        body: JSON.stringify({
+          id: $("memberId").value,
+          name: $("memberName").value,
+          role: $("memberRole").value,
+          status: $("memberStatus").value,
+          profile: {
+            preferredName: $("memberPreferredName").value,
+            ageGroup: $("memberAgeGroup").value,
+            interests: list($("memberInterests").value),
+            avoidTopics: list($("memberAvoidTopics").value)
+          },
+          persona: {
+            assistantName: $("memberAssistantName").value,
+            addressAs: $("memberPreferredName").value,
+            tone: $("memberTone").value,
+            verbosity: $("memberVerbosity").value,
+            traits: list($("memberTraits").value),
+            instructions: $("memberInstructions").value
+          },
+          memoryPolicy: {
+            enabled: $("memberMemoryEnabled").checked,
+            maxContextItems: Number($("memberMemoryLimit").value || 8),
+            includeFamilyMemory: true,
+            includeLearning: true,
+            retentionDays: Number($("memberRetentionDays").value || 365)
+          }
+        })
+      });
+      ["memberId", "memberName", "memberStatus", "memberPreferredName", "memberAgeGroup",
+       "memberInterests", "memberAvoidTopics", "memberAssistantName", "memberTone",
+       "memberTraits", "memberInstructions"].forEach((id) => { $(id).value = ""; });
+      $("memberVerbosity").value = "brief";
+      $("memberMemoryLimit").value = "8";
+      $("memberRetentionDays").value = "365";
+      $("memberMemoryEnabled").checked = true;
+      await loadAll();
+    });
+    $("policyModeSelect").addEventListener("change", renderPolicyEditor);
+    $("savePolicy").addEventListener("click", async () => {
+      const policy = {};
+      document.querySelectorAll("[data-policy-key]").forEach((input) => {
+        policy[input.dataset.policyKey] = input.checked;
+      });
+      await api(`/api/admin/family/policies/${encodeURIComponent($("policyModeSelect").value)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ policy })
+      });
+      await loadAll();
+    });
+    $("sendIntent").addEventListener("click", async () => { await api("/api/intent", { method: "POST", body: JSON.stringify({ text: $("intentText").value, role: "parent" }) }); await loadAll(); });
+    $("toastTest").addEventListener("click", async () => { await action("toast", { message: "后台测试提示" }); await loadAll(); });
+    $("haScene").addEventListener("click", async () => { await action("homeassistant.scene", { entityId: "scene.family" }); await loadAll(); });
+    $("runOpenclaw").addEventListener("click", async () => { await action("openclaw.run", { target: $("openclawTarget").value }); await loadAll(); });
+    $("createToken").addEventListener("click", async () => {
+      const created = await api("/api/admin/tokens", {
+        method: "POST",
+        body: JSON.stringify({ name: $("tokenName").value || `${$("tokenKind").value} token`, kind: $("tokenKind").value })
+      });
+      prompt("令牌只显示这一次，请妥善保存", created.token);
+      $("tokenName").value = "";
+      await loadAll();
+    });
+    $("autoPath").addEventListener("click", () => { $("resourcePath").value = resourceDefaultPath($("resourceFile").files[0], $("contentType")?.value || ""); });
+    $("resourceFile").addEventListener("change", () => { if (!$("resourcePath").value) $("resourcePath").value = resourceDefaultPath($("resourceFile").files[0], $("contentType")?.value || ""); });
+    $("contentType").addEventListener("change", () => {
+      const file = $("resourceFile").files[0];
+      if (file) {
+        $("resourcePath").value = resourceDefaultPath(file, $("contentType").value);
+      }
+    });
+    $("uploadResource").addEventListener("click", async () => {
+      const file = $("resourceFile").files[0];
+      if (!file) throw new Error("请选择文件");
+      await api("/api/resources/import", { method: "POST", body: JSON.stringify({ path: $("resourcePath").value || resourceDefaultPath(file, $("contentType")?.value || ""), contentBase64: arrayBufferToBase64(await file.arrayBuffer()) }) });
+      $("resourcePath").value = "";
+      $("resourceFile").value = "";
+      await loadAll();
+    });
+    $("seedContent").addEventListener("click", async () => { await api("/api/content/seed", { method: "POST", body: "{}" }); await loadAll(); });
+    $("recommendContent").addEventListener("click", async () => { await action("content.recommend", { type: "story" }); await loadAll(); });
+    $("importContentFile").addEventListener("click", async () => {
+      const file = $("resourceFile").files[0];
+      if (!file) throw new Error("请选择文件");
+      const type = $("contentType").value || "album";
+      const path = $("resourcePath").value || resourceDefaultPath(file, type);
+      const title = $("contentTitle").value || file.name;
+      await api("/api/content/import", {
+        method: "POST",
+        body: JSON.stringify({
+          pack: { id: `${type}-admin-pack`, type, title: `${type} 后台导入` },
+          item: {
+            id: `${type}-${Date.now()}`,
+            type,
+            title,
+            subtitle: "admin upload",
+            tags: [type, "admin"],
+            path
+          },
+          path,
+          contentBase64: arrayBufferToBase64(await file.arrayBuffer())
+        })
+      });
+      $("resourcePath").value = "";
+      $("resourceFile").value = "";
+      $("contentTitle").value = "";
+      await loadAll();
+    });
+    $("importStory").addEventListener("click", async () => {
+      await api("/api/content/import", {
+        method: "POST",
+        body: JSON.stringify({
+          pack: { id: "manual-story-pack", type: "story", title: "手动故事包" },
+          item: { id: `story-${Date.now()}`, type: "story", title: "手动导入故事", language: "zh-CN", tags: ["story", "admin"] },
+          path: `courses/stories/manual-${Date.now()}.json`,
+          contentBase64: btoa(unescape(encodeURIComponent(json({ title: "手动导入故事", paragraphs: ["这是从后台导入的故事。"] }))))
+        })
+      });
+      await loadAll();
+    });
+    $("saveMemory").addEventListener("click", async () => { await api("/api/memory", { method: "POST", body: JSON.stringify({ text: $("memoryText").value, memberId: "child", visibility: "family", tags: ["admin"] }) }); await loadAll(); });
+    $("reloadDiag").addEventListener("click", loadAll);
+    $("fillAcceptanceDraft").addEventListener("click", async () => {
+      const id = $("acceptanceId").value;
+      const pack = await api(`/api/admin/acceptance/evidence-pack?items=${encodeURIComponent(id)}`);
+      const draft = pack.evidenceDrafts?.[id];
+      if (!draft) {
+        toast("没有找到证据草稿", true);
+        return;
+      }
+      $("acceptanceStatus").value = draft.status || "pending";
+      $("acceptanceNote").value = draft.note || "";
+      $("acceptanceReference").value = draft.reference || "";
+      $("acceptanceData").value = json(draft.data || {});
+      toast("已填入 pending 草稿，真机/服务确认后再记录");
+    });
+    $("downloadAcceptancePack").addEventListener("click", async () => {
+      const pack = await api("/api/admin/acceptance/evidence-pack");
+      downloadJsonFile(`acceptance-pack-${new Date().toISOString().replace(/[:.]/g, "-")}.json`, pack);
+      toast("证据包已下载");
+    });
+    $("saveAcceptance").addEventListener("click", async () => {
+      const id = $("acceptanceId").value;
+      const data = parseOptionalJson("acceptanceData");
+      await api(`/api/admin/acceptance/${encodeURIComponent(id)}/evidence`, {
+        method: "POST",
+        body: JSON.stringify({
+          status: $("acceptanceStatus").value,
+          note: $("acceptanceNote").value,
+          reference: $("acceptanceReference").value,
+          data,
+          source: "admin",
+          actor: "parent"
+        })
+      });
+      $("acceptanceNote").value = "";
+      $("acceptanceReference").value = "";
+      $("acceptanceData").value = "";
+      await loadAll();
+    });
+    $("previewUi").addEventListener("click", async () => { $("uiPreview").textContent = json(await api(`/api/ui/page/${$("previewPage").value}`)); });
+    document.body.addEventListener("click", async (event) => {
+      const playId = event.target.dataset.playTrack;
+      const queueTrackId = event.target.dataset.queueTrack;
+      const favTrackId = event.target.dataset.favTrack;
+      const playQueueId = event.target.dataset.playQueue;
+      const moveQueueId = event.target.dataset.moveQueue;
+      const removeQueueId = event.target.dataset.removeQueue;
+      const resumeTrackId = event.target.dataset.resumeTrack;
+      const completeProgressId = event.target.dataset.completeProgress;
+      const resetProgressId = event.target.dataset.resetProgress;
+      const renameTrackId = event.target.dataset.renameTrack;
+      const deleteTrackId = event.target.dataset.deleteTrack;
+      const catalogId = event.target.dataset.deleteCatalog;
+      const refreshFeedId = event.target.dataset.refreshFeed;
+      const toggleFeedId = event.target.dataset.toggleFeed;
+      const deleteFeedId = event.target.dataset.deleteFeed;
+      const favoriteId = event.target.dataset.deleteFavorite;
+      const resourcePath = event.target.dataset.deleteResource;
+      const memoryId = event.target.dataset.deleteMemory;
+      const editMemoryId = event.target.dataset.editMemory;
+      const activeMemberId = event.target.dataset.activeMember;
+      const viewMemberContextId = event.target.dataset.viewMemberContext;
+      const editMemberId = event.target.dataset.editMember;
+      const exportMemberId = event.target.dataset.exportMember;
+      const archiveMemberId = event.target.dataset.archiveMember;
+      const deleteMemberId = event.target.dataset.deleteMember;
+      const diagnosticsDeviceId = event.target.dataset.deviceDiagnostics;
+      const rotateTokenId = event.target.dataset.rotateToken;
+      const revokeTokenId = event.target.dataset.revokeToken;
+      if (rotateTokenId) {
+        const rotated = await api(`/api/admin/tokens/${encodeURIComponent(rotateTokenId)}/rotate`, { method: "POST", body: "{}" });
+        prompt("新令牌只显示这一次，请妥善保存", rotated.token);
+        await loadAll();
+      } else if (revokeTokenId) {
+        if (confirm("确认撤销这个令牌？")) {
+          await api(`/api/admin/tokens/${encodeURIComponent(revokeTokenId)}`, { method: "DELETE" });
+          await loadAll();
+        }
+      } else if (diagnosticsDeviceId) {
+        const payload = await api(`/api/admin/devices/${encodeURIComponent(diagnosticsDeviceId)}/diagnostics`);
+        $("deviceDiag").textContent = json({ device: payload, metrics: state.metrics });
+      } else if (exportMemberId) {
+        const payload = await api(`/api/admin/family/members/${encodeURIComponent(exportMemberId)}/export`);
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `family-member-${exportMemberId}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+      } else if (archiveMemberId) {
+        if (confirm(`归档成员 ${archiveMemberId}？归档后不会再作为当前使用者。`)) {
+          await api(`/api/admin/family/members/${encodeURIComponent(archiveMemberId)}/archive`, { method: "POST", body: "{}" });
+          await loadAll();
+        }
+      } else if (editMemoryId) {
+        const item = (state.memory.items || []).find((entry) => entry.id === editMemoryId);
+        if (!item) return;
+        const text = prompt("修改记忆内容", item.text || "");
+        if (text === null || !text.trim()) return;
+        const expiresAt = prompt("到期时间（ISO；留空表示长期）", item.expiresAt || "");
+        if (expiresAt === null) return;
+        await api(`/api/memory/${encodeURIComponent(editMemoryId)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ text: text.trim(), expiresAt: expiresAt.trim() || null })
+        });
+        await loadAll();
+      } else if (playId) {
+        await api("/api/admin/media/command", { method: "POST", body: JSON.stringify({ tool: "family.media.play", trackId: playId, deviceId: "esp32-185b" }) });
+        await loadAll();
+      } else if (queueTrackId) {
+        await api("/api/media/queue", { method: "POST", body: JSON.stringify({ trackId: queueTrackId, deviceId: "esp32-185b" }) });
+        await loadAll();
+      } else if (favTrackId) {
+        await api("/api/media/favorites", { method: "POST", body: JSON.stringify({ trackId: favTrackId }) });
+        await loadAll();
+      } else if (playQueueId) {
+        await api("/api/media/queue/play", { method: "POST", body: JSON.stringify({ itemId: playQueueId, deviceId: "esp32-185b" }) });
+        await loadAll();
+      } else if (moveQueueId) {
+        await api(`/api/media/queue/${encodeURIComponent(moveQueueId)}`, { method: "PATCH", body: JSON.stringify({ direction: event.target.dataset.queueDirection || "up" }) });
+        await loadAll();
+      } else if (removeQueueId) {
+        await api(`/api/media/queue/${encodeURIComponent(removeQueueId)}`, { method: "DELETE" });
+        await loadAll();
+      } else if (resumeTrackId) {
+        await api("/api/media/resume", { method: "POST", body: JSON.stringify({ trackId: resumeTrackId, deviceId: "esp32-185b" }) });
+        await loadAll();
+      } else if (completeProgressId) {
+        await api(`/api/media/server/progress/${encodeURIComponent(completeProgressId)}`, { method: "PATCH", body: JSON.stringify({ deviceId: "esp32-185b", completed: true }) });
+        await loadAll();
+      } else if (resetProgressId) {
+        await api(`/api/media/server/progress/${encodeURIComponent(resetProgressId)}`, { method: "DELETE" });
+        await loadAll();
+      } else if (renameTrackId) {
+        const title = prompt("新的曲目名称", event.target.dataset.trackTitle || "");
+        if (title) {
+          await api(`/api/admin/media/server/${encodeURIComponent(renameTrackId)}`, { method: "PATCH", body: JSON.stringify({ title }) });
+          await loadAll();
+        }
+      } else if (deleteTrackId) {
+        if (confirm("确认删除这个服务器本地音频文件？")) {
+          await api(`/api/admin/media/server/${encodeURIComponent(deleteTrackId)}`, { method: "DELETE" });
+          await loadAll();
+        }
+      } else if (catalogId) {
+        await api(`/api/admin/media/catalog/${encodeURIComponent(catalogId)}`, { method: "DELETE" });
+        await loadAll();
+      } else if (refreshFeedId) {
+        await api(`/api/admin/podcasts/feeds/${encodeURIComponent(refreshFeedId)}/refresh`, { method: "POST", body: "{}" });
+        await loadAll();
+      } else if (toggleFeedId) {
+        await api(`/api/admin/podcasts/feeds/${encodeURIComponent(toggleFeedId)}`, { method: "PATCH", body: JSON.stringify({ enabled: event.target.dataset.feedEnabled !== "1" }) });
+        await loadAll();
+      } else if (deleteFeedId) {
+        if (confirm("确认删除这个播客订阅和它的节目列表？")) {
+          await api(`/api/admin/podcasts/feeds/${encodeURIComponent(deleteFeedId)}`, { method: "DELETE" });
+          await loadAll();
+        }
+      } else if (favoriteId) {
+        await api(`/api/media/favorites/${encodeURIComponent(favoriteId)}`, { method: "DELETE" });
+        await loadAll();
+      } else if (resourcePath) {
+        await api(`/api/resources/file/${pathUrl(resourcePath)}`, { method: "DELETE" });
+        await loadAll();
+      } else if (memoryId) {
+        await api(`/api/memory/${encodeURIComponent(memoryId)}`, { method: "DELETE" });
+        await loadAll();
+      } else if (activeMemberId) {
+        const member = (state.family?.members || []).find((item) => item.id === activeMemberId);
+        const mode = member?.role === "child" ? "儿童" : member?.role === "guest" ? "访客" : "默认";
+        await api("/api/admin/family/active-member", {
+          method: "PATCH",
+          body: JSON.stringify({ mode, memberId: activeMemberId })
+        });
+        await loadAll();
+      } else if (viewMemberContextId) {
+        const context = await api(`/api/admin/family/members/${encodeURIComponent(viewMemberContextId)}/context`);
+        $("deviceDiag").textContent = json(context.data);
+        document.querySelector('[data-tab="devices"]').click();
+      } else if (editMemberId) {
+        const member = (state.family?.members || []).find((item) => item.id === editMemberId);
+        if (member) {
+          $("memberId").value = member.id;
+          $("memberName").value = member.name || "";
+          $("memberRole").value = member.role || "member";
+          $("memberStatus").value = member.status || "";
+          $("memberPreferredName").value = member.profile?.preferredName || "";
+          $("memberAgeGroup").value = member.profile?.ageGroup || "";
+          $("memberInterests").value = (member.profile?.interests || []).join(", ");
+          $("memberAvoidTopics").value = (member.profile?.avoidTopics || []).join(", ");
+          $("memberAssistantName").value = member.persona?.assistantName || "";
+          $("memberTone").value = member.persona?.tone || "";
+          $("memberVerbosity").value = member.persona?.verbosity || "brief";
+          $("memberTraits").value = (member.persona?.traits || []).join(", ");
+          $("memberInstructions").value = member.persona?.instructions || "";
+          $("memberMemoryLimit").value = member.memoryPolicy?.maxContextItems || 8;
+          $("memberRetentionDays").value = member.memoryPolicy?.retentionDays || 365;
+          $("memberMemoryEnabled").checked = member.memoryPolicy?.enabled !== false;
+        }
+      } else if (deleteMemberId) {
+        const confirmId = prompt(`输入成员 ID ${deleteMemberId} 以确认删除`, "");
+        if (confirmId === deleteMemberId) {
+          const memoryAction = prompt("成员数据处理：delete（删除）/ retain（保留到家庭）/ transfer（转移）", "retain");
+          if (!memoryAction) return;
+          let targetMemberId = "";
+          if (memoryAction === "transfer") targetMemberId = prompt("输入接收数据的成员 ID", "") || "";
+          await api(`/api/admin/family/members/${encodeURIComponent(deleteMemberId)}`, {
+            method: "DELETE",
+            body: JSON.stringify({ confirmId, memoryAction, targetMemberId })
+          });
+          await loadAll();
+        }
+      }
+    });
+
+    loadAll().catch((error) => toast(error.message, true));
+  </script>
+</body>
+</html>

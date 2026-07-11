@@ -1,0 +1,28 @@
+{
+  "id": "/companion",
+  "name": "Family Hub 管理台",
+  "short_name": "Family Hub",
+  "description": "Family AI OS 圆屏设备的移动管理控制台:状态、诊断、内容、集成、验收与配网。",
+  "start_url": "/companion",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1418",
+  "theme_color": "#0f1418",
+  "lang": "zh-CN",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/pwa/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

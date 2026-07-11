@@ -1,0 +1,20 @@
+[Unit]
+Description=Xiaozhi Family Hub MCP Bridge
+After=network-online.target xiaozhi-family-hub.service
+Wants=network-online.target
+Requires=xiaozhi-family-hub.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/xiaozhi-family-hub/current
+Environment=FAMILY_BACKEND_URL=http://127.0.0.1:3100
+Environment=XIAOZHI_MCP_ENDPOINT_FILE=/opt/xiaozhi-family-hub/shared/secrets/xiaozhi-mcp-endpoint
+Environment=XIAOZHI_TOOL_TOKEN_FILE=/opt/xiaozhi-family-hub/shared/secrets/xiaozhi-tool-token
+ExecStart=/opt/node-v22/bin/node src/xiaozhi-mcp-bridge.js
+Restart=always
+RestartSec=3
+User=xiaozhi
+Group=xiaozhi
+
+[Install]
+WantedBy=multi-user.target

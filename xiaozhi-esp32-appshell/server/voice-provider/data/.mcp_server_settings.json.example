@@ -1,0 +1,25 @@
+{
+  "//": "======================================================================",
+  "//1": "xiaozhi-esp32-server MCP 服务端配置模板 —— Option B (备选路径, 可选)",
+  "//2": "Feature: selfhosted-voice-provider-page-agents / design.md 第 3 节",
+  "//3": "",
+  "//4": "推荐做法是 Option A: 本地 function-calling 插件",
+  "//5": "  plugins_func/functions/family_agent_ask.py",
+  "//6": "它直接 HTTP POST 到 Family_Backend 的 POST /api/agent/ask, 无需后端额外",
+  "//7": "搭建 MCP surface。Family_Backend 目前只暴露 HTTP 接口, 因此 Option B 需要",
+  "//8": "后端额外开发一个包裹 family.agent.ask 的 MCP 端点, 成本更高。",
+  "//9": "",
+  "//10": "本文件仅在你确实需要通过 MCP 暴露该工具 (例如给其它 MCP 客户端复用) 时使用。",
+  "//11": "复制为 data/.mcp_server_settings.json (去掉 .example) 后填入真实地址/密钥。",
+  "//12": "${XIAOZHI_TOOL_TOKEN} 由运行环境注入; 密钥绝不进入 speech/display (Req 7.5)。",
+  "//13": "======================================================================",
+  "mcpServers": {
+    "family-agent": {
+      "url": "http://192.168.31.246:3100/mcp/agent",
+      "transport": "streamable-http",
+      "headers": {
+        "Authorization": "Bearer ${XIAOZHI_TOOL_TOKEN}"
+      }
+    }
+  }
+}

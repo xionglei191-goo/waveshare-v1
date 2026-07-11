@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Xiaozhi Family Hub SQLite backup
+
+[Timer]
+OnCalendar=*-*-* 03:20:00
+Persistent=true
+Unit=xiaozhi-family-hub-backup.service
+
+[Install]
+WantedBy=timers.target

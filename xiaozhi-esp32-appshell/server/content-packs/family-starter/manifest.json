@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "id": "family-starter-2026",
+  "title": "家庭启蒙内容包",
+  "version": 1,
+  "source": {
+    "kind": "family-owned",
+    "author": "Family Hub"
+  },
+  "license": "private-family-use",
+  "contents": [
+    {
+      "type": "english",
+      "path": "english-family-routines.json"
+    },
+    {
+      "type": "game",
+      "path": "game-family-quiz.json"
+    }
+  ]
+}

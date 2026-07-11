@@ -9,3 +9,30 @@ include/secrets.h
 
 # Local ESP-IDF framework tree (restored via restore-idf-and-build.sh, ~3.6GB)
 .tools/
+
+# xiaozhi-esp32-appshell build artifacts and dependencies (now a plain subdirectory)
+xiaozhi-esp32-appshell/build/
+xiaozhi-esp32-appshell/managed_components/
+xiaozhi-esp32-appshell/components/
+xiaozhi-esp32-appshell/server/node_modules/
+xiaozhi-esp32-appshell/server/data/state.json
+xiaozhi-esp32-appshell/server/logs/
+xiaozhi-esp32-appshell/releases/
+xiaozhi-esp32-appshell/dist/
+xiaozhi-esp32-appshell/tmp/
+xiaozhi-esp32-appshell/.cache/
+xiaozhi-esp32-appshell/.playwright-cli/
+xiaozhi-esp32-appshell/.pytest_cache/
+xiaozhi-esp32-appshell/sdkconfig
+xiaozhi-esp32-appshell/sdkconfig.old
+xiaozhi-esp32-appshell/dependencies.lock
+xiaozhi-esp32-appshell/main/assets/lang_config.h
+xiaozhi-esp32-appshell/main/mmap_generate_emoji.h
+xiaozhi-esp32-appshell/.env
+xiaozhi-esp32-appshell/**/*.bin
+xiaozhi-esp32-appshell/**/*.pyc
+xiaozhi-esp32-appshell/**/mmap_generate_*.h
+
+# secrets and env anywhere in appshell
+xiaozhi-esp32-appshell/server/**/.env
+xiaozhi-esp32-appshell/**/secrets/

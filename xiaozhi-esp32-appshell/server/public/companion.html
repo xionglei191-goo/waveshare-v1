@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1418">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Family Hub">
+  <link rel="manifest" href="/pwa/manifest.webmanifest">
+  <link rel="icon" href="/pwa/icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/pwa/icons/icon-192.png">
+  <title>Family Hub 管理台</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1418;
+      --panel: #182026;
+      --panel-2: #202a31;
+      --line: #35444d;
+      --text: #f2f7f5;
+      --muted: #93a3aa;
+      --accent: #5ee0b5;
+      --blue: #71a8ff;
+      --warn: #f2c35b;
+      --bad: #ff7c7c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+      padding-top: env(safe-area-inset-top);
+    }
+    main {
+      width: min(860px, 100%);
+      margin: 0 auto;
+      padding: 0 14px 40px;
+    }
+    .appbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: linear-gradient(180deg, var(--bg) 70%, rgba(15,20,24,0.86));
+      padding: calc(env(safe-area-inset-top) + 12px) 0 6px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 22px; font-weight: 720; }
+    h2 { font-size: 16px; font-weight: 680; }
+    .muted { color: var(--muted); }
+    .status {
+      min-width: 78px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      text-align: center;
+      color: var(--accent);
+      background: #10191a;
+      font-size: 13px;
+      font-weight: 680;
+    }
+    .status.offline { color: var(--warn); border-color: #84692a; }
+    .status.error { color: var(--bad); border-color: #7a3030; }
+    .subline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 4px;
+      font-size: 12px;
+    }
+    .install {
+      display: none;
+      min-height: 0;
+      width: auto;
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid #2e8f73;
+      background: #13352d;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 680;
+      cursor: pointer;
+    }
+    .install.show { display: inline-block; }
+    .banner {
+      display: none;
+      margin-top: 8px;
+      padding: 8px 11px;
+      border: 1px solid #84692a;
+      border-radius: 8px;
+      background: #2a2210;
+      color: var(--warn);
+      font-size: 13px;
+    }
+    .banner.show { display: block; }
+    nav {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      margin-top: 10px;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    nav::-webkit-scrollbar { display: none; }
+    nav button {
+      flex: 0 0 auto;
+      width: auto;
+      min-height: 36px;
+      padding: 0 14px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 680;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    nav button.active {
+      color: var(--bg);
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .section { display: none; margin-top: 14px; }
+    .section.active { display: block; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 12px;
+      min-height: 92px;
+    }
+    .wide { grid-column: 1 / -1; }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-top: 8px;
+    }
+    .metric {
+      font-size: 28px;
+      font-weight: 760;
+      color: var(--accent);
+    }
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    button, input, select, textarea {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      font: inherit;
+      letter-spacing: 0;
+    }
+    button {
+      cursor: pointer;
+      font-weight: 680;
+    }
+    button.primary {
+      background: #13352d;
+      border-color: #2e8f73;
+      color: var(--accent);
+    }
+    button.warn {
+      background: #392f19;
+      border-color: #84692a;
+      color: var(--warn);
+    }
+    input, select, textarea {
+      padding: 0 11px;
+      text-align: left;
+    }
+    textarea {
+      min-height: 76px;
+      padding: 9px 11px;
+      resize: vertical;
+    }
+    pre {
+      max-height: 220px;
+      overflow: auto;
+      margin: 8px 0 0;
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      background: #10161b;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+    ul {
+      margin: 8px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 0;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    code {
+      color: var(--blue);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+    }
+    @media (max-width: 620px) {
+      .grid { grid-template-columns: 1fr; }
+      .buttons { grid-template-columns: 1fr 1fr; }
+      h1 { font-size: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="appbar">
+      <header>
+        <div>
+          <h1>Family Hub 管理台</h1>
+          <p class="muted" id="subtitle">--</p>
+        </div>
+        <div class="status" id="status">--</div>
+      </header>
+      <div class="subline">
+        <span class="muted" id="lastUpdated">尚未刷新</span>
+        <button class="install" id="install">安装到主屏</button>
+      </div>
+      <div class="banner" id="offlineBanner">离线模式:显示的是最近一次缓存的界面,数据可能不是最新。</div>
+      <nav id="tabs">
+        <button data-tab="overview" class="active">概览</button>
+        <button data-tab="content">内容</button>
+        <button data-tab="integrations">集成</button>
+        <button data-tab="acceptance">验收</button>
+        <button data-tab="provisioning">配网</button>
+        <button data-tab="diagnostics">诊断</button>
+      </nav>
+    </div>
+
+    <!-- 概览 -->
+    <section class="section active grid" data-section="overview">
+      <article class="panel">
+        <h2>家庭模式</h2>
+        <div class="metric" id="mode">--</div>
+        <div class="buttons">
+          <button data-mode="默认">默认</button>
+          <button data-mode="儿童">儿童</button>
+          <button data-mode="访客">访客</button>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>圆屏设备</h2>
+        <div class="metric" id="deviceCount">0</div>
+        <p class="muted" id="deviceLine">--</p>
+        <div class="buttons">
+          <button id="register" class="primary">注册</button>
+          <button id="refresh">刷新</button>
+        </div>
+      </article>
+
+      <article class="panel wide">
+        <h2>快捷动作</h2>
+        <div class="buttons">
+          <button id="music">音乐</button>
+          <button id="english">英语</button>
+          <button id="openclaw">OpenClaw</button>
+          <button id="ha">HA 场景</button>
+        </div>
+      </article>
+
+      <article class="panel wide">
+        <h2>语音意图</h2>
+        <div class="row">
+          <input id="intentText" value="推荐一个故事">
+          <button id="sendIntent" class="primary">发送</button>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>安全</h2>
+        <div class="metric" id="denied">0</div>
+        <p class="muted" id="policyLine">--</p>
+      </article>
+    </section>
+
+    <!-- 内容 -->
+    <section class="section grid" data-section="content">
+      <article class="panel wide">
+        <h2>内容库</h2>
+        <div class="buttons">
+          <button id="seedContent" class="primary">生成示例资源</button>
+          <button id="recommendContent">推荐内容</button>
+          <button id="importStory">导入故事</button>
+          <button id="manifest">Manifest</button>
+        </div>
+        <div class="row">
+          <input id="resourceFile" type="file">
+          <input id="resourcePath" placeholder="images/photo.jpg">
+        </div>
+        <div class="row">
+          <select id="contentType">
+            <option value="album">相册</option>
+            <option value="podcast">播客</option>
+            <option value="english">英语</option>
+            <option value="story">故事</option>
+            <option value="game">小游戏</option>
+          </select>
+          <input id="contentTitle" placeholder="内容标题">
+        </div>
+        <div class="buttons">
+          <button id="uploadResource" class="primary">上传资源</button>
+          <button id="importContentFile">上传并入库</button>
+          <button id="seedPath">自动路径</button>
+        </div>
+        <ul id="contentList"></ul>
+      </article>
+
+      <article class="panel wide">
+        <h2>Remote UI V2</h2>
+        <div class="row">
+          <select id="previewPage">
+            <option value="apps">apps</option>
+            <option value="english">english</option>
+            <option value="content">content</option>
+            <option value="home">home</option>
+          </select>
+          <button id="previewUi">预览</button>
+        </div>
+        <pre id="uiPreview">--</pre>
+      </article>
+
+      <article class="panel wide">
+        <h2>家庭记忆</h2>
+        <div class="row">
+          <textarea id="memoryText">孩子喜欢温柔的睡前故事</textarea>
+          <button id="saveMemory" class="primary">保存</button>
+        </div>
+        <ul id="memoryList"></ul>
+      </article>
+    </section>
+
+    <!-- 集成 -->
+    <section class="section grid" data-section="integrations">
+      <article class="panel">
+        <h2>集成</h2>
+        <ul id="integrations"></ul>
+      </article>
+
+      <article class="panel">
+        <h2>OpenClaw Jobs</h2>
+        <ul id="openclawJobs"></ul>
+      </article>
+    </section>
+
+    <!-- 验收 -->
+    <section class="section grid" data-section="acceptance">
+      <article class="panel wide">
+        <h2>外部验收</h2>
+        <p class="muted">记录手机配网、HA、真实素材和 OpenClaw 任务映射的验收证据;写入需要管理 token。</p>
+        <div class="row">
+          <select id="acceptanceId"></select>
+          <select id="acceptanceStatus">
+            <option value="pending">待验收</option>
+            <option value="passed">通过</option>
+            <option value="failed">失败</option>
+            <option value="blocked">阻塞</option>
+          </select>
+        </div>
+        <textarea id="acceptanceNote" placeholder="记录证据:截图、串口日志、设备状态、HA 状态变化等"></textarea>
+        <input id="acceptanceReference" placeholder="证据引用:截图路径、日志 id、HA 实体或 job id">
+        <textarea id="acceptanceData" placeholder='结构化 data JSON,可选,例如 {"ssid":"...","ip":"..."}'></textarea>
+        <div class="buttons">
+          <button id="fillAcceptanceDraft">填入草稿</button>
+          <button id="downloadAcceptancePack">下载证据包</button>
+          <button id="saveAcceptance" class="primary">记录证据</button>
+          <button id="refreshAcceptance">刷新验收</button>
+        </div>
+        <ul id="acceptanceList"></ul>
+      </article>
+    </section>
+
+    <!-- 配网 -->
+    <section class="section grid" data-section="provisioning">
+      <article class="panel wide">
+        <h2>配网(SoftAP 网页)</h2>
+        <p class="muted">设备进入配网态会开热点 <code>Xiaozhi-XXXX</code>。手机连上该热点,浏览器打开 <code>http://192.168.4.1</code> 选择家庭 Wi-Fi 并提交即可,全平台可用。配好后回本页刷新确认 SSID/IP/后端在线。</p>
+        <div class="buttons">
+          <button id="blufiGuide">配网步骤</button>
+          <button id="connectivityRefresh">刷新连接</button>
+        </div>
+        <pre id="connectivity">--</pre>
+      </article>
+    </section>
+
+    <!-- 诊断 -->
+    <section class="section grid" data-section="diagnostics">
+      <article class="panel wide">
+        <h2>管理访问</h2>
+        <p class="muted">公网写操作和后台诊断需要管理 token;局域网只读状态无需填写。</p>
+        <div class="row">
+          <input id="adminToken" type="password" placeholder="ADMIN_TOKEN">
+          <button id="saveToken" class="primary">保存</button>
+        </div>
+        <div class="buttons">
+          <button id="clearToken">清除</button>
+          <button id="testToken">测试</button>
+        </div>
+      </article>
+
+      <article class="panel wide">
+        <h2>日志</h2>
+        <ul id="logs"></ul>
+      </article>
+
+      <article class="panel wide">
+        <h2>诊断</h2>
+        <pre id="diagnostics">--</pre>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const tokenKey = "familyHubAdminToken";
+    let acceptancePack = null;
+
+    function authHeaders() {
+      const token = localStorage.getItem(tokenKey) || "";
+      return token ? { Authorization: `Bearer ${token}`, "X-Admin-Token": token } : {};
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, {
+        ...options,
+        headers: { "Content-Type": "application/json", ...authHeaders(), ...(options.headers || {}) }
+      });
+      const body = await res.json();
+      if (!res.ok || !body.ok) {
+        throw new Error(body.error || res.statusText);
+      }
+      return body.data;
+    }
+
+    async function action(name, params = {}) {
+      return api("/api/action", {
+        method: "POST",
+        body: JSON.stringify({ type: "action.call", name, params: { ...params, role: "parent" } })
+      });
+    }
+
+    function esc(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[ch]));
+    }
+
+    function downloadJsonFile(filename, value) {
+      const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function renderList(id, items, empty = "--") {
+      const node = $(id);
+      node.innerHTML = "";
+      if (!items.length) {
+        node.innerHTML = `<li><span class="muted">${empty}</span></li>`;
+        return;
+      }
+      for (const item of items) {
+        const li = document.createElement("li");
+        li.innerHTML = item;
+        node.appendChild(li);
+      }
+    }
+
+    function parseOptionalJson(id) {
+      const raw = $(id).value.trim();
+      if (!raw) return {};
+      return JSON.parse(raw);
+    }
+
+    function resourceDefaultPath(file, contentType = "") {
+      const name = (file?.name || `resource-${Date.now()}`).replace(/[^\w.\-() ]+/g, "_");
+      const ext = name.split(".").pop().toLowerCase();
+      const type = String(contentType || "").toLowerCase();
+      if (type === "album") return `images/${name}`;
+      if (type === "podcast") return `music/server/${name}`;
+      if (type === "english") return `courses/english/${name}`;
+      if (type === "game") return `games/${name}`;
+      if (type === "story") return `courses/stories/${name}`;
+      if (["jpg", "jpeg", "png"].includes(ext)) return `images/${name}`;
+      if (["ogg", "opus", "mp3"].includes(ext)) return `music/server/${name}`;
+      if (ext === "json") return `courses/stories/${name}`;
+      return `cache/${name}`;
+    }
+
+    function arrayBufferToBase64(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+      }
+      return btoa(binary);
+    }
+
+    function setStatus(state, text) {
+      const node = $("status");
+      node.className = `status ${state === "online" ? "" : state}`.trim();
+      node.textContent = text;
+      $("offlineBanner").classList.toggle("show", state === "offline");
+    }
+
+    async function refresh() {
+      if (!navigator.onLine) {
+        setStatus("offline", "离线");
+      }
+      const [summary, integrations, policy, logs, catalog, jobs, memory, diagnostics, acceptance] = await Promise.all([
+        api("/api/device/summary"),
+        api("/api/integrations/status"),
+        api("/api/family/policies"),
+        api("/api/device/logs"),
+        api("/api/content/catalog"),
+        api("/api/openclaw/jobs"),
+        api("/api/memory"),
+        api("/api/diagnostics/report"),
+        api("/api/acceptance/status")
+      ]);
+      try {
+        acceptancePack = await api("/api/admin/acceptance/evidence-pack");
+      } catch (error) {
+        acceptancePack = { error: error.message, nextActions: {} };
+      }
+      setStatus("online", "online");
+      $("subtitle").textContent = summary.backend.publicBaseUrl;
+      $("lastUpdated").textContent = `最近更新 ${new Date().toLocaleTimeString("zh-CN")}`;
+      $("mode").textContent = summary.familyMode;
+      $("deviceCount").textContent = summary.devices.count;
+      $("deviceLine").textContent = summary.devices.recent[0]?.profile || "--";
+      $("denied").textContent = policy.deniedCount;
+      $("policyLine").textContent = `schema ${summary.remoteUi?.schemaVersion || summary.compatibility.remoteUiSchema} | api ${summary.compatibility.backendApi}`;
+      $("adminToken").value = localStorage.getItem(tokenKey) || "";
+      $("connectivity").textContent = JSON.stringify({
+        wifi: summary.connectivity?.wifi || null,
+        blufi: summary.connectivity?.blufi || null,
+        phoneProxy: summary.connectivity?.phoneProxy || null,
+        backend: summary.backend?.publicBaseUrl,
+        strategy: "Home Wi-Fi first; BluFi for provisioning; public tunnel for remote management; phone proxy reserved."
+      }, null, 2);
+      renderList("integrations", [
+        `<span>OpenClaw</span><code>${integrations.openclaw.sourceStatus || "unavailable"}</code>`,
+        `<span>Home Assistant</span><code>${integrations.homeAssistant.sourceStatus || "unavailable"}</code>`,
+        `<span>NAS</span><code>${integrations.nas.sourceStatus || "unavailable"}</code>`,
+        `<span>天气</span><code>${integrations.weather?.sourceStatus || "unavailable"}</code>`,
+        `<span>BluFi</span><code>${summary.connectivity?.blufi?.deviceName || "Xiaozhi-Blufi"}</code>`
+      ]);
+      renderList("contentList", (catalog.catalog || []).slice(0, 6).map((item) =>
+        `<span>${item.title}</span><code>${item.type} ${item.packId}</code>`
+      ), "暂无内容");
+      renderList("openclawJobs", (jobs.jobs || []).slice(0, 6).map((job) =>
+        `<span>${job.target} ${job.status}</span><code>${job.exitCode ?? "--"} ${job.durationMs || 0}ms</code>`
+      ), "暂无任务");
+      renderList("memoryList", (memory.items || []).slice(0, 6).map((item) =>
+        `<span>${item.title}</span><code>${item.memberId} ${item.visibility}</code>`
+      ), "暂无记忆");
+      renderList("logs", (logs.logs || []).slice(0, 5).map((log) =>
+        `<span>${log.message || log.source}</span><code>${log.level}</code>`
+      ), "暂无日志");
+      $("acceptanceId").innerHTML = (acceptance.items || []).map((item) =>
+        `<option value="${item.id}">${item.phase} ${item.title}</option>`
+      ).join("");
+      const readinessById = Object.fromEntries((diagnostics.acceptanceReadiness?.items || []).map((item) => [item.id, item]));
+      const nextActionsById = acceptancePack?.nextActions || {};
+      renderList("acceptanceList", (acceptance.items || []).map((item) => {
+        const ready = readinessById[item.id] || { status: "missing", okCount: 0, total: 0, checks: [] };
+        const checks = (ready.checks || []).map((check) =>
+          `${check.ok ? "✓" : "×"} ${esc(check.label)}: ${esc(check.detail || "")}`
+        ).join("<br>");
+        const actions = (nextActionsById[item.id] || []).slice(0, 5).map((action) =>
+          `→ ${esc(action.text || action)}`
+        ).join("<br>") || `输入管理 token 后可查看下一步${acceptancePack?.error ? `:${esc(acceptancePack.error)}` : ""}`;
+        return `<span>${esc(item.title)}<br><span class="muted">${esc(item.requirement)}</span><br><span class="muted">${checks}</span><br><span class="muted"><b>下一步</b><br>${actions}</span></span><code>${esc(item.status)} ${item.evidenceCount || 0}<br>ready ${ready.okCount}/${ready.total}</code>`;
+      }), "暂无验收项");
+      $("diagnostics").textContent = JSON.stringify({
+        store: diagnostics.backend.storeDriver,
+        openclaw: diagnostics.integrationStatus.openclawConfigured,
+        events: diagnostics.eventStatus,
+        resources: diagnostics.resourceStatus,
+        esp32: diagnostics.esp32Status,
+        acceptance: diagnostics.acceptanceStatus,
+        readiness: diagnostics.acceptanceReadiness,
+        content: diagnostics.contentStatus,
+        remoteUi: diagnostics.remoteUi,
+        memory: diagnostics.memoryStatus
+      }, null, 2);
+    }
+
+    // Tab navigation.
+    document.querySelectorAll("#tabs button").forEach((button) => {
+      button.addEventListener("click", () => {
+        const tab = button.dataset.tab;
+        document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b === button));
+        document.querySelectorAll(".section").forEach((s) => s.classList.toggle("active", s.dataset.section === tab));
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+
+    document.querySelectorAll("[data-mode]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        await action("family.mode", { mode: button.dataset.mode });
+        await refresh();
+      });
+    });
+    $("register").addEventListener("click", async () => {
+      await api("/api/devices/register", {
+        method: "POST",
+        body: JSON.stringify({
+          id: "waveshare-1.85b-main",
+          profile: "waveshare-esp32-s3-touch-lcd-1.85b",
+          firmware: "2.2.6",
+          room: "home"
+        })
+      });
+      await refresh();
+    });
+    $("refresh").addEventListener("click", () => refresh().catch(showError));
+    $("saveToken").addEventListener("click", async () => {
+      localStorage.setItem(tokenKey, $("adminToken").value.trim());
+      await refresh();
+    });
+    $("clearToken").addEventListener("click", async () => {
+      localStorage.removeItem(tokenKey);
+      $("adminToken").value = "";
+      await refresh();
+    });
+    $("testToken").addEventListener("click", async () => {
+      const data = await api("/api/admin/config");
+      $("diagnostics").textContent = JSON.stringify(data, null, 2);
+    });
+    $("blufiGuide").addEventListener("click", () => {
+      $("connectivity").textContent = [
+        "验收目标:通过 SoftAP 网页写入一个新 Wi-Fi,并确认小智官方 OTA/MQTT/唤醒词不受影响。",
+        "",
+        "1. 让设备进入配网态(无已存 Wi-Fi 会自动进入,或开机时按 BOOT 键)。设置页显示配网热点名。",
+        "2. 手机 Wi-Fi 列表连接设备热点 Xiaozhi-XXXX(无需密码或按屏幕提示)。",
+        "3. 手机浏览器打开 http://192.168.4.1,在配网页选择家庭 Wi-Fi、输入密码并提交。",
+        "4. 等待设备提示联网成功;手机切回家庭 Wi-Fi。",
+        "5. 回到本页刷新,确认 Wi-Fi SSID/IP/RSSI、后端在线、设备日志更新时间。",
+        "6. 在设备上唤醒小智,确认 OTA/MQTT/唤醒词和基础对话仍正常。",
+        "7. 记录证据:配网页成功、设备设置页 IP、/api/device/summary、串口无 panic。",
+        "失败处理:靠近路由器重试;确认热点未被手机判定为无网络而自动断开。"
+      ].join("\n");
+    });
+    $("connectivityRefresh").addEventListener("click", () => refresh().catch(showError));
+    $("refreshAcceptance").addEventListener("click", () => refresh().catch(showError));
+    $("fillAcceptanceDraft").addEventListener("click", async () => {
+      const id = $("acceptanceId").value;
+      const pack = await api(`/api/admin/acceptance/evidence-pack?items=${encodeURIComponent(id)}`);
+      const draft = pack.evidenceDrafts?.[id];
+      if (!draft) {
+        $("subtitle").textContent = "没有找到证据草稿";
+        return;
+      }
+      $("acceptanceStatus").value = draft.status || "pending";
+      $("acceptanceNote").value = draft.note || "";
+      $("acceptanceReference").value = draft.reference || "";
+      $("acceptanceData").value = JSON.stringify(draft.data || {}, null, 2);
+      $("subtitle").textContent = "已填入 pending 草稿,确认真实结果后再记录";
+    });
+    $("downloadAcceptancePack").addEventListener("click", async () => {
+      const pack = await api("/api/admin/acceptance/evidence-pack");
+      downloadJsonFile(`acceptance-pack-${new Date().toISOString().replace(/[:.]/g, "-")}.json`, pack);
+      $("subtitle").textContent = "证据包已下载";
+    });
+    $("saveAcceptance").addEventListener("click", async () => {
+      const id = $("acceptanceId").value;
+      const data = parseOptionalJson("acceptanceData");
+      await api(`/api/admin/acceptance/${encodeURIComponent(id)}/evidence`, {
+        method: "POST",
+        body: JSON.stringify({
+          status: $("acceptanceStatus").value,
+          note: $("acceptanceNote").value,
+          reference: $("acceptanceReference").value,
+          data,
+          source: "companion",
+          actor: "parent"
+        })
+      });
+      $("acceptanceNote").value = "";
+      $("acceptanceReference").value = "";
+      $("acceptanceData").value = "";
+      await refresh();
+    });
+    $("music").addEventListener("click", async () => { await action("music.play_pause"); await refresh(); });
+    $("english").addEventListener("click", async () => { await action("english.start"); await refresh(); });
+    $("openclaw").addEventListener("click", async () => { await action("openclaw.run", { target: "default" }); await refresh(); });
+    $("ha").addEventListener("click", async () => { await action("homeassistant.scene", { entityId: "scene.family" }); await refresh(); });
+    $("seedContent").addEventListener("click", async () => { await api("/api/content/seed", { method: "POST", body: "{}" }); await refresh(); });
+    $("recommendContent").addEventListener("click", async () => { await action("content.recommend", { type: "story" }); await refresh(); });
+    $("importStory").addEventListener("click", async () => {
+      await api("/api/content/import", {
+        method: "POST",
+        body: JSON.stringify({
+          pack: { id: "manual-story-pack", type: "story", title: "手动故事包" },
+          item: {
+            id: `story-${Date.now()}`,
+            type: "story",
+            title: "手动导入故事",
+            subtitle: "companion import",
+            language: "zh-CN",
+            tags: ["story", "manual"]
+          },
+          path: `courses/stories/manual-${Date.now()}.json`,
+          contentBase64: btoa(unescape(encodeURIComponent(JSON.stringify({
+            title: "手动导入故事",
+            paragraphs: ["这是从伴侣页导入的故事。"]
+          }))))
+        })
+      });
+      await refresh();
+    });
+    $("manifest").addEventListener("click", async () => {
+      const data = await api("/api/resources/manifest");
+      $("diagnostics").textContent = JSON.stringify(data, null, 2);
+    });
+    $("seedPath").addEventListener("click", () => {
+      const file = $("resourceFile").files[0];
+      $("resourcePath").value = resourceDefaultPath(file);
+    });
+    $("resourceFile").addEventListener("change", () => {
+      const file = $("resourceFile").files[0];
+      if (file && !$("resourcePath").value) {
+        $("resourcePath").value = resourceDefaultPath(file);
+      }
+    });
+    $("contentType").addEventListener("change", () => {
+      const file = $("resourceFile").files[0];
+      if (file) {
+        $("resourcePath").value = resourceDefaultPath(file, $("contentType").value);
+      }
+    });
+    $("uploadResource").addEventListener("click", async () => {
+      const file = $("resourceFile").files[0];
+      if (!file) throw new Error("请选择文件");
+      const path = $("resourcePath").value || resourceDefaultPath(file);
+      const contentBase64 = arrayBufferToBase64(await file.arrayBuffer());
+      const data = await api("/api/resources/import", {
+        method: "POST",
+        body: JSON.stringify({ path, contentBase64 })
+      });
+      $("diagnostics").textContent = JSON.stringify(data.file, null, 2);
+      await refresh();
+    });
+    $("importContentFile").addEventListener("click", async () => {
+      const file = $("resourceFile").files[0];
+      if (!file) throw new Error("请选择文件");
+      const type = $("contentType").value || "album";
+      const path = $("resourcePath").value || resourceDefaultPath(file, type);
+      const contentBase64 = arrayBufferToBase64(await file.arrayBuffer());
+      const data = await api("/api/content/import", {
+        method: "POST",
+        body: JSON.stringify({
+          pack: {
+            id: `${type}-manual-pack`,
+            type,
+            title: `${type} 手动导入`
+          },
+          item: {
+            id: `${type}-${Date.now()}`,
+            type,
+            title: $("contentTitle").value || file.name,
+            subtitle: "companion upload",
+            tags: [type, "manual"],
+            path
+          },
+          path,
+          contentBase64
+        })
+      });
+      $("diagnostics").textContent = JSON.stringify(data.result || data, null, 2);
+      await refresh();
+    });
+    $("previewUi").addEventListener("click", async () => {
+      const data = await api(`/api/ui/page/${$("previewPage").value}`);
+      $("uiPreview").textContent = JSON.stringify(data, null, 2);
+    });
+    $("saveMemory").addEventListener("click", async () => {
+      await api("/api/memory", {
+        method: "POST",
+        body: JSON.stringify({ text: $("memoryText").value, memberId: "child", visibility: "family", tags: ["companion"] })
+      });
+      await refresh();
+    });
+    $("sendIntent").addEventListener("click", async () => {
+      await api("/api/intent", {
+        method: "POST",
+        body: JSON.stringify({ text: $("intentText").value, role: "parent" })
+      });
+      await refresh();
+    });
+
+    function showError(error) {
+      setStatus(navigator.onLine ? "error" : "offline", navigator.onLine ? "error" : "离线");
+      $("subtitle").textContent = error.message;
+    }
+
+    // Install prompt (Android Chrome).
+    let deferredPrompt = null;
+    window.addEventListener("beforeinstallprompt", (event) => {
+      event.preventDefault();
+      deferredPrompt = event;
+      $("install").classList.add("show");
+    });
+    $("install").addEventListener("click", async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      $("install").classList.remove("show");
+    });
+    window.addEventListener("appinstalled", () => {
+      $("install").classList.remove("show");
+    });
+
+    // Online/offline transitions.
+    window.addEventListener("online", () => refresh().catch(showError));
+    window.addEventListener("offline", () => setStatus("offline", "离线"));
+
+    // Register the service worker for installability + offline shell.
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+      });
+    }
+
+    refresh().catch(showError);
+  </script>
+</body>
+</html>
