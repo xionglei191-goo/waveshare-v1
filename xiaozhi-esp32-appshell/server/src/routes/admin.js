@@ -18,7 +18,18 @@ function tokenAudit(state, action, reason, requestId) {
 }
 
 function registerAdminRoutes(router, context) {
-  const { store, config, adminAuth, observability, requestControls, updateAndPublish } = context;
+  const {
+    store,
+    config,
+    adminAuth,
+    observability,
+    requestControls,
+    updateAndPublish,
+    publishMutation,
+    deviceSummary,
+    listAiTraces,
+    safeAdminConfig
+  } = context;
   router.get("/admin/dashboard", adminAuth, (req, res) => {
     res.json({ ok: true, data: buildAdminDashboard(store.snapshot()) });
   });
@@ -106,6 +117,23 @@ function registerAdminRoutes(router, context) {
       });
       res.json({ ok: true, data: { token: revoked } });
     } catch (error) { next(error); }
+  });
+  router.get("/admin/ai/traces", adminAuth, (req, res) => {
+    const state = store.snapshot();
+    res.json({ ok: true, data: {
+      stats: state.aiRuntime?.stats || {},
+      deviceContexts: Object.values(state.aiRuntime?.deviceContexts || {}),
+      traces: listAiTraces(state, req.query)
+    } });
+  });
+  router.get("/admin/config", adminAuth, (req, res) => {
+    res.json({ ok: true, data: safeAdminConfig(config) });
+  });
+  router.post("/admin/reset", adminAuth, (req, res) => {
+    const before = store.snapshot();
+    const snapshot = store.reset();
+    publishMutation(before, snapshot, "admin.reset");
+    res.json({ ok: true, data: deviceSummary(snapshot, config) });
   });
 }
 

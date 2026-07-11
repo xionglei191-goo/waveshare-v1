@@ -1,4 +1,3 @@
-const childProcess = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
@@ -18,7 +17,9 @@ const { recommendContent } = require("./content");
 const { resolveVoiceIntent } = require("./intent");
 const { listKnownServerTracks, listServerTracks } = require("./media");
 const { auditAction, ensureSecurityState, evaluateAction } = require("./security");
-const { runHomeAssistantService } = require("./home-assistant");
+const { runHomeAssistantService } = require("./adapters/home-assistant");
+const { executableStatus, runOpenClawSync } = require("./adapters/openclaw");
+const { recordVoiceIntent } = require("./adapters/voice");
 
 const ACTIONS = new Set([
   "ai.toggle",
@@ -141,22 +142,6 @@ function pushOpenClawJob(state, job) {
   state.openclaw.lastRunAt = job.finishedAt || job.startedAt || job.createdAt;
 }
 
-function executableStatus(command) {
-  if (!command) {
-    return "missing command";
-  }
-  try {
-    fs.accessSync(command, fs.constants.X_OK);
-    return "";
-  } catch (error) {
-    return error.code === "ENOENT" ? "command not found" : "command not executable";
-  }
-}
-
-function outputSummary(value) {
-  return String(value || "").trim().slice(0, 600);
-}
-
 function runOpenClaw(state, config, params) {
   ensureOpenClawState(state);
   const target = String(params.target || "default").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 48) || "default";
@@ -203,19 +188,15 @@ function runOpenClaw(state, config, params) {
   job.sourceStatus = "real";
   job.startedAt = new Date().toISOString();
   const start = Date.now();
-  const result = childProcess.spawnSync(config.openclawCommand, [target], {
-    encoding: "utf8",
-    timeout: config.openclawTimeoutMs || 10000,
-    maxBuffer: 128 * 1024
-  });
+  const result = runOpenClawSync(config.openclawCommand, target, config.openclawTimeoutMs || 10000);
   job.finishedAt = new Date().toISOString();
   job.durationMs = Date.now() - start;
   job.pid = result.pid || null;
   job.exitCode = typeof result.status === "number" ? result.status : null;
   job.signal = result.signal || null;
-  job.stdout = outputSummary(result.stdout);
-  job.stderr = outputSummary(result.stderr || result.error?.message || "");
-  if (result.error?.code === "ETIMEDOUT") {
+  job.stdout = result.stdout;
+  job.stderr = result.stderr;
+  if (result.timedOut) {
     job.status = "timeout";
     job.message = `OpenClaw 超时: ${target}`;
   } else if (result.status === 0) {
@@ -579,16 +560,12 @@ function handleAction(state, name, params, config) {
     case "voice.intent": {
       const text = params.text || params.transcript || params.intent || "";
       const intent = resolveVoiceIntent(text, params);
-      state.voice = state.voice || { history: [] };
-      state.voice.history.unshift({
-        id: `voice_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
-        at: new Date().toISOString(),
+      recordVoiceIntent(state, {
         text,
         matched: intent.matched,
         action: intent.action || "",
         reason: intent.reason
       });
-      state.voice.history = state.voice.history.slice(0, 50);
       if (!intent.matched) {
         pushNotification(state, "语音意图", `未匹配: ${text}`, "warn");
         break;

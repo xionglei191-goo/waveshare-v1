@@ -1,4 +1,3 @@
-const childProcess = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
@@ -17,8 +16,9 @@ const { addLearningRecord, createMemory, listLearningRecords, listMemory } = req
 const { normalizeFamilyMode, resolveMember } = require("./member-context");
 const { buildResourceManifest } = require("./resources");
 const { actionCategory, auditAction, ensureSecurityState, evaluateAction } = require("./security");
-const { runHomeAssistantService } = require("./home-assistant");
-const { refreshWeatherState } = require("./weather");
+const { runHomeAssistantService } = require("./adapters/home-assistant");
+const { executableStatus, runOpenClaw } = require("./adapters/openclaw");
+const { refreshWeatherState } = require("./adapters/weather");
 
 const DEFAULT_DEVICE_ID = "esp32-185b";
 
@@ -1374,80 +1374,6 @@ function pushOpenClawJob(state, job) {
   state.openclaw.lastRunAt = job.finishedAt || job.startedAt || job.createdAt;
 }
 
-function executableStatus(command) {
-  if (!command) {
-    return "missing command";
-  }
-  try {
-    fs.accessSync(command, fs.constants.X_OK);
-    return "";
-  } catch (error) {
-    return error.code === "ENOENT" ? "command not found" : "command not executable";
-  }
-}
-
-function outputSummary(value) {
-  return String(value || "").trim().slice(0, 600);
-}
-
-function appendLimited(buffer, chunk, limit = 128 * 1024) {
-  const next = `${buffer}${chunk}`;
-  return next.length > limit ? next.slice(0, limit) : next;
-}
-
-function spawnCommand(command, args, timeoutMs) {
-  return new Promise((resolve) => {
-    let settled = false;
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    let child = null;
-
-    const finish = (result) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      resolve({
-        pid: child?.pid || null,
-        stdout,
-        stderr,
-        timedOut,
-        ...result
-      });
-    };
-
-    try {
-      child = childProcess.spawn(command, args, {
-        stdio: ["ignore", "pipe", "pipe"]
-      });
-    } catch (error) {
-      finish({ status: null, signal: null, error });
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGTERM");
-      setTimeout(() => child.kill("SIGKILL"), 500).unref();
-    }, timeoutMs).unref();
-
-    child.stdout.on("data", (chunk) => {
-      stdout = appendLimited(stdout, chunk);
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr = appendLimited(stderr, chunk);
-    });
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      finish({ status: null, signal: null, error });
-    });
-    child.on("close", (status, signal) => {
-      clearTimeout(timer);
-      finish({ status, signal, error: null });
-    });
-  });
-}
 
 async function executeOpenClawRun(state, config, args, context) {
   ensureOpenClawState(state);
@@ -1497,14 +1423,14 @@ async function executeOpenClawRun(state, config, args, context) {
   job.sourceStatus = "real";
   job.startedAt = new Date().toISOString();
   const start = Date.now();
-  const result = await spawnCommand(config.openclawCommand, [target], config.openclawTimeoutMs || 10000);
+  const result = await runOpenClaw(config.openclawCommand, target, config.openclawTimeoutMs || 10000);
   job.finishedAt = new Date().toISOString();
   job.durationMs = Date.now() - start;
   job.pid = result.pid || null;
   job.exitCode = typeof result.status === "number" ? result.status : null;
   job.signal = result.signal || null;
-  job.stdout = outputSummary(result.stdout);
-  job.stderr = outputSummary(result.stderr || result.error?.message || "");
+  job.stdout = result.stdout;
+  job.stderr = result.stderr || String(result.error?.message || "").slice(0, 600);
   if (result.timedOut) {
     job.status = "timeout";
     job.message = `OpenClaw 超时: ${target}`;

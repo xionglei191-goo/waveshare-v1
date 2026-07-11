@@ -11,6 +11,15 @@ npm start
 
 默认监听 `0.0.0.0:3100`，设备默认访问 `http://192.168.31.246:3100`。`3000` 端口保留给远端现有服务。
 
+## Backend Layers
+
+- Route：`src/routes/` 按 `family`、`devices`、`agent`、`media`、`acceptance`、`admin` 注册 HTTP 契约；只解析请求、调用领域模块并组织响应。
+- Service：`family-service.js`、`agents.js`、`capabilities.js`、`media.js`、`content.js`、`memory.js`、`security.js` 承担家庭规则、权限、编排和状态变更。
+- Repository：`store.js`、`sqlite-store.js`、`sqlite-migrations.js` 统一持久化接口；路由不直接执行 SQL，SQLite 迁移和关系镜像由 repository 层负责。
+- Adapter：`src/adapters/` 隔离 OpenClaw 子进程、Home Assistant、Open-Meteo 和语音事件入口；业务模块不自行创建外部进程或拼接 Provider 调用。
+
+路由组采用逐组迁移：迁移前以现有 smoke 固化 URL、状态码和响应结构，迁移后运行内存、兼容 SQLite、关系读取 SQLite 和 Provider 回归。不得同时改写 HTTP 契约和领域行为。
+
 管理后台：
 
 - `/admin`：正式 Family Hub 后台，管理媒体库、家庭权限、设备、工具、内容、资源和诊断。
