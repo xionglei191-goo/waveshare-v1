@@ -28,7 +28,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: xiaozhi-voice-provider:0.9.5-family-router3
+    image: xiaozhi-voice-provider:0.9.5-family-router5
     container_name: xiaozhi-voice-provider
     network_mode: host
     security_opt:
@@ -52,6 +52,9 @@ services:
       - FAMILY_BACKEND_CIRCUIT_FAILURES=3
       - FAMILY_BACKEND_CIRCUIT_COOLDOWN_MS=15000
       - FAMILY_DEVICE_ID=esp32-185b
-      - FAMILY_LIGHTWEIGHT_MODEL=gpt-5.4-mini
-      - FAMILY_COMPLEX_MODEL=gpt-5.5
+      - FAMILY_LIGHTWEIGHT_MODEL=deepseek-v4-flash
+      - FAMILY_COMPLEX_MODEL=deepseek-v4-pro
+      - FAMILY_LIGHTWEIGHT_DISABLE_THINKING=1
+      - FAMILY_LIGHTWEIGHT_MAX_TOKENS=160
+      - FAMILY_TTS_PREWARM=1
     restart: unless-stopped

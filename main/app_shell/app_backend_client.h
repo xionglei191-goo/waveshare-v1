@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <esp_http_client.h>
 
 struct AppWeatherState {
     std::string summary = "天气待更新";
@@ -164,6 +165,7 @@ public:
 
 private:
     AppBackendClient() = default;
+    ~AppBackendClient();
 
     std::string BuildUrl(const char* path) const;
     bool Request(const std::string& method, const std::string& path, const std::string& body,
@@ -173,6 +175,7 @@ private:
     std::string backend_url_ = "http://192.168.31.246:3100";
     std::string device_token_;
     std::mutex request_mutex_;
+    esp_http_client_handle_t http_client_ = nullptr;
 };
 
 #endif

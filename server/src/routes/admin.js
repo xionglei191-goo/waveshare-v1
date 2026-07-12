@@ -6,6 +6,7 @@ const {
 } = require("../auth-tokens");
 const { ensureDeviceCommandState, pendingDeviceCommands } = require("../device-commands");
 const { buildAdminDashboard, deviceDiagnostics } = require("../device-registry");
+const { summarizeAiLatency } = require("../ai-runtime");
 const { auditAction } = require("../security");
 
 function tokenAudit(state, action, reason, requestId) {
@@ -122,6 +123,7 @@ function registerAdminRoutes(router, context) {
     const state = store.snapshot();
     res.json({ ok: true, data: {
       stats: state.aiRuntime?.stats || {},
+      latencySummary: summarizeAiLatency(state, req.query.limit),
       deviceContexts: Object.values(state.aiRuntime?.deviceContexts || {}),
       traces: listAiTraces(state, req.query)
     } });

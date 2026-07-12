@@ -211,6 +211,12 @@ AppBackendClient& AppBackendClient::GetInstance() {
     return instance;
 }
 
+AppBackendClient::~AppBackendClient() {
+    if (http_client_ != nullptr) {
+        esp_http_client_cleanup(http_client_);
+    }
+}
+
 void AppBackendClient::LoadSettings() {
     Settings settings(kSettingsNs, false);
     backend_url_ = settings.GetString(kBackendUrlKey, kDefaultBackendUrl);
@@ -229,6 +235,11 @@ void AppBackendClient::SetDeviceToken(const std::string& device_token) {
 }
 
 void AppBackendClient::SetBackendUrl(const std::string& backend_url) {
+    std::lock_guard<std::mutex> request_lock(request_mutex_);
+    if (http_client_ != nullptr) {
+        esp_http_client_cleanup(http_client_);
+        http_client_ = nullptr;
+    }
     backend_url_ = backend_url.empty() ? kDefaultBackendUrl : backend_url;
     Settings settings(kSettingsNs, true);
     settings.SetString(kBackendUrlKey, backend_url_);
@@ -721,35 +732,48 @@ bool AppBackendClient::Request(const std::string& method, const std::string& pat
 
     const std::string url = BuildUrl(path.c_str());
 
-    esp_http_client_config_t config = {};
-    config.url = url.c_str();
-    config.timeout_ms = kHttpTimeoutMs;
-    config.event_handler = BackendHttpEventHandler;
-    config.user_data = &response;
-    config.keep_alive_enable = false;
-    config.buffer_size = 768;
-    config.buffer_size_tx = 512;
+    esp_err_t err = ESP_FAIL;
+    int status = 0;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (http_client_ == nullptr) {
+            esp_http_client_config_t config = {};
+            config.url = url.c_str();
+            config.timeout_ms = kHttpTimeoutMs;
+            config.event_handler = BackendHttpEventHandler;
+            config.user_data = &response;
+            config.keep_alive_enable = true;
+            config.buffer_size = 768;
+            config.buffer_size_tx = 512;
+            http_client_ = esp_http_client_init(&config);
+        }
+        if (http_client_ == nullptr) {
+            error = "http init failed";
+            break;
+        }
 
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (client == nullptr) {
-        error = "http init failed";
-        ESP_LOGW(TAG, "%s %s failed: %s", method.c_str(), url.c_str(), error.c_str());
-        return false;
+        esp_http_client_set_url(http_client_, url.c_str());
+        esp_http_client_set_user_data(http_client_, &response);
+        esp_http_client_set_method(http_client_, method == "POST" ? HTTP_METHOD_POST : HTTP_METHOD_GET);
+        esp_http_client_set_header(http_client_, "Accept", "application/json");
+        esp_http_client_set_header(http_client_, "Connection", "keep-alive");
+        esp_http_client_set_header(http_client_, "User-Agent", "xiaozhi-appshell/1");
+        if (!body.empty()) {
+            esp_http_client_set_header(http_client_, "Content-Type", "application/json");
+            esp_http_client_set_post_field(http_client_, body.data(), body.size());
+        } else {
+            esp_http_client_delete_header(http_client_, "Content-Type");
+            esp_http_client_set_post_field(http_client_, nullptr, 0);
+        }
+
+        response.clear();
+        err = esp_http_client_perform(http_client_);
+        status = esp_http_client_get_status_code(http_client_);
+        if (err == ESP_OK) {
+            break;
+        }
+        esp_http_client_cleanup(http_client_);
+        http_client_ = nullptr;
     }
-
-    esp_http_client_set_method(client, method == "POST" ? HTTP_METHOD_POST : HTTP_METHOD_GET);
-    esp_http_client_set_header(client, "Accept", "application/json");
-    esp_http_client_set_header(client, "Connection", "close");
-    esp_http_client_set_header(client, "User-Agent", "xiaozhi-appshell/1");
-    if (!body.empty()) {
-        esp_http_client_set_header(client, "Content-Type", "application/json");
-        esp_http_client_set_post_field(client, body.data(), body.size());
-    }
-
-    response.clear();
-    esp_err_t err = esp_http_client_perform(client);
-    const int status = esp_http_client_get_status_code(client);
-    esp_http_client_cleanup(client);
 
     if (err != ESP_OK) {
         error = "perform failed: " + std::to_string(static_cast<int>(err));

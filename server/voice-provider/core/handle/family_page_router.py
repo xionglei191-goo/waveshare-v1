@@ -213,12 +213,74 @@ def report_first_audio(conn):
     if not started:
         return
     conn.family_first_audio_reported = True
+    timings = {"firstAudioMs": int((time.monotonic() - started) * 1000)}
+    tts_started = float(getattr(conn, "family_tts_queued_monotonic", 0.0) or 0.0)
+    if tts_started:
+        timings["ttsFirstAudioMs"] = int((time.monotonic() - tts_started) * 1000)
     report_trace_async(
         conn,
         "first_audio",
         status="handled" if not getattr(conn, "family_fallback_reason", "") else "fallback",
-        timings={"firstAudioMs": int((time.monotonic() - started) * 1000)},
+        timings=timings,
     )
+
+
+def report_tts_queued(conn):
+    conn.family_tts_queued_monotonic = time.monotonic()
+    report_trace_async(conn, "tts_queued", status="handled")
+
+
+def visible_response_content(response):
+    if isinstance(response, tuple):
+        return response[0] if response else ""
+    if isinstance(response, dict):
+        return response.get("content") or ""
+    return response if isinstance(response, str) else ""
+
+
+def sanitize_plain_stream(responses):
+    """Unwrap provider DSML direct_answer output without speaking protocol tags."""
+    prefix = "<｜｜DSML｜｜tool_calls>"
+    value_marker = 'name="response" string="true">'
+    close_marker = "</｜｜DSML｜｜parameter>"
+    buffer = ""
+    mode = "detect"
+    for response in responses:
+        content = visible_response_content(response)
+        if not content:
+            continue
+        if mode == "plain":
+            yield content
+            continue
+        buffer += content
+        if mode == "detect":
+            stripped = buffer.lstrip()
+            if prefix.startswith(stripped) and len(stripped) < len(prefix):
+                continue
+            if not stripped.startswith(prefix):
+                mode = "plain"
+                yield buffer
+                buffer = ""
+                continue
+            marker_at = buffer.find(value_marker)
+            if marker_at < 0:
+                continue
+            buffer = buffer[marker_at + len(value_marker):]
+            mode = "dsml"
+        if mode == "dsml":
+            close_at = buffer.find(close_marker)
+            if close_at >= 0:
+                if close_at:
+                    yield buffer[:close_at]
+                return
+            safe_end = max(0, len(buffer) - len(close_marker))
+            if safe_end:
+                yield buffer[:safe_end]
+                buffer = buffer[safe_end:]
+    if mode == "plain" and buffer:
+        yield buffer
+    elif mode == "dsml" and buffer:
+        yield buffer
 
 
 def trace_llm_stream(conn, responses, model_name):
@@ -227,7 +289,7 @@ def trace_llm_stream(conn, responses, model_name):
     first = True
     try:
         for response in responses:
-            if first:
+            if first and visible_response_content(response):
                 first = False
                 report_trace_async(
                     conn,
@@ -298,6 +360,15 @@ async def route_family_page_turn(conn, utterance, post_backend=None, call_contex
     conn.family_fallback_reason = ""
     conn.family_model_tier = ""
     conn.family_model_name = ""
+    conn.family_allow_provider_tools = True
+    conn.family_tts_queued_monotonic = 0.0
+    listen_stopped = float(getattr(conn, "family_listen_stopped_monotonic", 0.0) or 0.0)
+    if listen_stopped:
+        report_trace_async(
+            conn,
+            "asr_final",
+            timings={"asrFinalizeMs": int((started - listen_stopped) * 1000)},
+        )
 
     pending = getattr(conn, "family_page_pending_request", None)
     choice = confirmation_choice(utterance) if isinstance(pending, dict) else None
@@ -395,6 +466,7 @@ async def route_family_page_turn(conn, utterance, post_backend=None, call_contex
         _record_backend_success(conn)
         decision = parse_backend_response(status_code, payload)
         if decision is None:
+            conn.family_allow_provider_tools = False
             _set_fallback_metadata(conn, routed_utterance, payload)
             report_trace_async(
                 conn,

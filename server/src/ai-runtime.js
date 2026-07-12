@@ -238,12 +238,38 @@ function listAiTraces(state, filters = {}) {
     .map((item) => ({ ...item }));
 }
 
+function percentile(values, p) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p / 100) - 1))];
+}
+
+function summarizeAiLatency(state, limit = 100) {
+  const traces = listAiTraces(state, { limit: Math.max(1, Math.min(Number(limit) || 100, 300)) });
+  const groups = { deterministic: [], lightweight: [], complex: [] };
+  for (const trace of traces) {
+    const group = trace.modelTier === "complex" ? "complex" : trace.modelTier === "lightweight" ? "lightweight" : "deterministic";
+    groups[group].push(trace);
+  }
+  return Object.fromEntries(Object.entries(groups).map(([name, items]) => {
+    const firstAudio = items.map((item) => Number(item.timings?.firstAudioMs)).filter(Number.isFinite);
+    const failed = items.filter((item) => item.status === "failed" || item.errorType).length;
+    return [name, {
+      samples: items.length,
+      firstAudioP50Ms: percentile(firstAudio, 50),
+      firstAudioP95Ms: percentile(firstAudio, 95),
+      failureRate: items.length ? Math.round(failed * 1000 / items.length) / 1000 : 0
+    }];
+  }));
+}
+
 module.exports = {
   agentBodyWithDeviceContext,
   deviceContext,
   ensureAiRuntimeState,
   listAiTraces,
   modelTierForFallback,
+  summarizeAiLatency,
   updateDeviceContext,
   upsertAiTrace
 };

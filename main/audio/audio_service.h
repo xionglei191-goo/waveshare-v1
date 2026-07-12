@@ -82,6 +82,14 @@ struct AudioServiceCallbacks {
     std::function<void(const std::string&)> on_wake_word_detected;
     std::function<void(bool)> on_vad_change;
     std::function<void(void)> on_audio_testing_queue_full;
+    std::function<void(void)> on_first_playback_pcm;
+};
+
+struct AudioQueueMetrics {
+    uint32_t encode_peak = 0;
+    uint32_t send_peak = 0;
+    uint32_t decode_peak = 0;
+    uint32_t playback_peak = 0;
 };
 
 
@@ -130,6 +138,8 @@ public:
     void SetCallbacks(AudioServiceCallbacks& callbacks);
 
     bool PushPacketToDecodeQueue(std::unique_ptr<AudioStreamPacket> packet, bool wait = false);
+    void PrepareVoicePlayback();
+    AudioQueueMetrics GetAndResetVoiceQueueMetrics();
     std::unique_ptr<AudioStreamPacket> PopPacketFromSendQueue();
     void PlaySound(const std::string_view& sound);
     bool ReadAudioData(std::vector<int16_t>& data, int sample_rate, int samples);
@@ -198,6 +208,11 @@ private:
     // Shared progress state for MP3 and Ogg/Opus media playback.
     std::atomic<int> media_position_ms_{0};
     std::atomic<int> media_duration_ms_{0};
+    std::atomic<bool> first_playback_pcm_pending_{false};
+    std::atomic<uint32_t> encode_queue_peak_{0};
+    std::atomic<uint32_t> send_queue_peak_{0};
+    std::atomic<uint32_t> decode_queue_peak_{0};
+    std::atomic<uint32_t> playback_queue_peak_{0};
 
     void AudioInputTask();
     void AudioOutputTask();

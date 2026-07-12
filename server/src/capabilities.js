@@ -850,7 +850,7 @@ function confirmationRequiredCapability(state, tool, args, context, decision) {
   };
 }
 
-async function prepareCapability(name, args, state, config) {
+async function prepareCapability(name, args, state, config, options = {}) {
   const tool = capabilityMeta(name);
   const normalized = normalizeArgs(args);
   if (!tool) {
@@ -868,8 +868,24 @@ async function prepareCapability(name, args, state, config) {
   }
   if (name === "family.weather.today") {
     const preparedState = { weather: JSON.parse(JSON.stringify(state.weather || {})) };
+    const updatedAt = Date.parse(preparedState.weather?.updatedAt || "");
+    const cacheAgeMs = Number.isFinite(updatedAt) ? Math.max(0, Date.now() - updatedAt) : null;
+    const hasCache = Boolean(preparedState.weather?.summary || preparedState.weather?.condition);
+    const forceRefresh = truthyFlag(normalized.forceRefresh || normalized.force_refresh);
+    const cacheMaxAgeMs = Math.max(1000, Number(config.weatherAgentCacheMaxAgeMs) || 35 * 60 * 1000);
+    if (hasCache && !forceRefresh) {
+      return {
+        weatherRefresh: { ok: true, cached: true, skipped: true, cacheAgeMs, stale: cacheAgeMs === null || cacheAgeMs > cacheMaxAgeMs },
+        weather: preparedState.weather
+      };
+    }
+    const refreshTimeoutMs = Math.max(100, Number(config.weatherAgentRefreshTimeoutMs) || 800);
     return {
-      weatherRefresh: await refreshWeatherState(preparedState, config),
+      weatherRefresh: await refreshWeatherState(
+        preparedState,
+        { ...config, weatherTimeoutMs: refreshTimeoutMs },
+        { fetchImpl: options.fetchImpl }
+      ),
       weather: preparedState.weather
     };
   }
@@ -996,7 +1012,10 @@ function executeWeatherToday(state, prepared = {}) {
   const weather = state.weather || {};
   const refreshFailed = prepared.weatherRefresh && !prepared.weatherRefresh.ok;
   const staleSuffix = refreshFailed && weather.updatedAt ? `，使用 ${String(weather.updatedAt).slice(11, 16)} 的缓存数据` : "";
-  const speech = `今天${weather.location || "家"}${weather.summary || weather.condition || "天气暂无数据"}，体感 ${weather.apparentTemperature ?? "--"}℃，湿度 ${weather.humidity ?? "--"}%，${weather.air || ""}${staleSuffix}`.trim();
+  const temperature = Number.isFinite(Number(weather.temperature)) ? `${Math.round(Number(weather.temperature))}℃` : "";
+  const condition = weather.condition || weather.summary || "天气暂无数据";
+  const air = weather.air ? `，${weather.air}` : "";
+  const speech = `今天${weather.location || "家"}${condition}${temperature ? `，${temperature}` : ""}${air}${staleSuffix}`.trim();
   return {
     accepted: true,
     status: "accepted",

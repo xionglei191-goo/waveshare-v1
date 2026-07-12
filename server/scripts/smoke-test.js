@@ -804,6 +804,13 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
         profile: "waveshare-esp32-s3-touch-lcd-1.85b",
         freeHeap: 42000,
         minimumFreeHeap: 16000,
+        freeInternalSram: 12000,
+        minimumFreeInternalSram: 9000,
+        voiceTurnMetrics: {
+          firstPacketToPcmMs: 23,
+          droppedDecodePackets: 0,
+          droppedFirstPackets: 0
+        },
         wakeReason: "smoke wake",
         resetReason: "POWERON_RESET",
         backendProbe: "探针在线",
@@ -843,6 +850,9 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     const esp32Status = diagnosticsAfterHeartbeat.body.data.esp32Status;
     if (esp32Status?.network?.ssid !== "SmokeWiFi" ||
         esp32Status?.recentMemory?.minimumFreeHeap !== 16000 ||
+        esp32Status?.recentMemory?.freeInternalSram !== 12000 ||
+        esp32Status?.recentMemory?.minimumFreeInternalSram !== 9000 ||
+        esp32Status?.voiceTurnMetrics?.firstPacketToPcmMs !== 23 ||
         esp32Status?.wakeReason !== "smoke wake" ||
         esp32Status?.bootId !== "boot-smoke-1" ||
         esp32Status?.bootSequence !== 7 ||

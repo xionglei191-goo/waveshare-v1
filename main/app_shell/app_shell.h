@@ -258,6 +258,11 @@ private:
     std::atomic<bool> weather_refreshing_{false};
     std::atomic<bool> page_context_running_{false};
     std::atomic<bool> page_context_pending_{false};
+    TaskHandle_t backend_refresh_task_handle_ = nullptr;
+    TaskHandle_t backend_event_task_handle_ = nullptr;
+    TaskHandle_t page_context_task_handle_ = nullptr;
+    std::atomic<bool> backend_refresh_force_{false};
+    std::atomic<int> backend_refresh_requested_tick_{0};
 
     lv_obj_t* root_ = nullptr;
     lv_obj_t* header_title_label_ = nullptr;

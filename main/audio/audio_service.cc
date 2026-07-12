@@ -311,7 +311,7 @@ void AudioService::Start() {
         AudioService* audio_service = (AudioService*)arg;
         audio_service->OpusCodecTask();
         vTaskDeleteWithCaps(nullptr);
-    }, "opus_codec", 2048 * 12, this, 2, &opus_codec_task_handle_,
+    }, "opus_codec", 2048 * 12, this, 5, &opus_codec_task_handle_,
         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 }
 
@@ -456,6 +456,9 @@ void AudioService::AudioOutputTask() {
         }
 
         codec_->OutputData(task->pcm);
+        if (first_playback_pcm_pending_.exchange(false) && callbacks_.on_first_playback_pcm) {
+            callbacks_.on_first_playback_pcm();
+        }
 
         /* Update the last output time */
         last_output_time_ = std::chrono::steady_clock::now();
@@ -528,6 +531,7 @@ void AudioService::OpusCodecTask() {
                     }
                     lock.lock();
                     audio_playback_queue_.push_back(std::move(task));
+                    playback_queue_peak_.store(std::max<uint32_t>(playback_queue_peak_.load(), audio_playback_queue_.size()));
                     audio_queue_cv_.notify_all();
                     debug_statistics_.decode_count++;
                 } else {
@@ -571,6 +575,7 @@ void AudioService::OpusCodecTask() {
                         {
                             std::lock_guard<std::mutex> lock2(audio_queue_mutex_);
                             audio_send_queue_.push_back(std::move(packet));
+                            send_queue_peak_.store(std::max<uint32_t>(send_queue_peak_.load(), audio_send_queue_.size()));
                         }
                         if (callbacks_.on_send_queue_available) {
                             callbacks_.on_send_queue_available();
@@ -649,6 +654,7 @@ void AudioService::PushTaskToEncodeQueue(AudioTaskType type, std::vector<int16_t
 
     audio_queue_cv_.wait(lock, [this]() { return audio_encode_queue_.size() < MAX_ENCODE_TASKS_IN_QUEUE; });
     audio_encode_queue_.push_back(std::move(task));
+    encode_queue_peak_.store(std::max<uint32_t>(encode_queue_peak_.load(), audio_encode_queue_.size()));
     audio_queue_cv_.notify_all();
 }
 
@@ -662,8 +668,28 @@ bool AudioService::PushPacketToDecodeQueue(std::unique_ptr<AudioStreamPacket> pa
         }
     }
     audio_decode_queue_.push_back(std::move(packet));
+    decode_queue_peak_.store(std::max<uint32_t>(decode_queue_peak_.load(), audio_decode_queue_.size()));
     audio_queue_cv_.notify_all();
     return true;
+}
+
+void AudioService::PrepareVoicePlayback() {
+    ResetDecoder();
+    first_playback_pcm_pending_.store(true);
+    if (!codec_->output_enabled()) {
+        esp_timer_stop(audio_power_timer_);
+        esp_timer_start_periodic(audio_power_timer_, AUDIO_POWER_CHECK_INTERVAL_MS * 1000);
+        codec_->EnableOutput(true);
+    }
+}
+
+AudioQueueMetrics AudioService::GetAndResetVoiceQueueMetrics() {
+    return {
+        .encode_peak = encode_queue_peak_.exchange(0),
+        .send_peak = send_queue_peak_.exchange(0),
+        .decode_peak = decode_queue_peak_.exchange(0),
+        .playback_peak = playback_queue_peak_.exchange(0),
+    };
 }
 
 std::unique_ptr<AudioStreamPacket> AudioService::PopPacketFromSendQueue() {

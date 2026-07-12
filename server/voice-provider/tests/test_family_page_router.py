@@ -69,6 +69,23 @@ class RouterPureTests(unittest.TestCase):
             else:
                 os.environ["XIAOZHI_TOOL_TOKEN"] = old
 
+    def test_visible_response_content_ignores_hidden_chunks(self):
+        self.assertEqual(router.visible_response_content({"reasoning_content": "hidden"}), "")
+        self.assertEqual(router.visible_response_content(("", [{"name": "tool"}])), "")
+        self.assertEqual(router.visible_response_content(("可播报", None)), "可播报")
+
+    def test_plain_stream_unwraps_dsml_direct_answer(self):
+        chunks = [
+            "<｜｜DSML｜｜tool_",
+            'calls><｜｜DSML｜｜invoke name="direct_answer"><｜｜DSML｜｜parameter ',
+            'name="response" string="true">月球是地球的卫星',
+            "。</｜｜DSML｜｜parameter></｜｜DSML｜｜invoke></｜｜DSML｜｜tool_calls>",
+        ]
+        self.assertEqual("".join(router.sanitize_plain_stream(chunks)), "月球是地球的卫星。")
+
+    def test_plain_stream_preserves_normal_content(self):
+        self.assertEqual("".join(router.sanitize_plain_stream(["你好", "，世界"])), "你好，世界")
+
 
 class RouterAsyncTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -122,21 +139,23 @@ class RouterAsyncTests(unittest.IsolatedAsyncioTestCase):
             calls.append(body)
             return 200, {"ok": True, "data": {"handled": False, "fallbackReason": "general_query"}}
 
+        unhandled_conn = _Conn()
         decision = await router.route_family_page_turn(
-            _Conn(), "解释量子纠缠", post_backend=unhandled, call_context=_context
+            unhandled_conn, "解释量子纠缠", post_backend=unhandled, call_context=_context
         )
         self.assertIsNone(decision)
         self.assertEqual(len(calls), 1)
+        self.assertFalse(unhandled_conn.family_allow_provider_tools)
         self.assertEqual(router.model_for_connection(_Conn(), "你好"), "gpt-5.4-mini")
 
         def failed(body, timeout):
             raise TimeoutError("backend timeout")
 
-        self.assertIsNone(
-            await router.route_family_page_turn(
-                _Conn(), "你好", post_backend=failed, call_context=_context
-            )
-        )
+        failed_conn = _Conn()
+        self.assertIsNone(await router.route_family_page_turn(
+            failed_conn, "你好", post_backend=failed, call_context=_context
+        ))
+        self.assertTrue(failed_conn.family_allow_provider_tools)
 
     async def test_confirmation_reuses_original_utterance(self):
         conn = _Conn()

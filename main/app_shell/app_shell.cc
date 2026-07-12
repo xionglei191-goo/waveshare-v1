@@ -88,11 +88,6 @@ constexpr size_t kMaxScreensaverJpegBytes = 2 * 1024 * 1024;
 constexpr size_t kSramSoftReserveBytes = 16 * 1024;
 constexpr size_t kSramCriticalReserveBytes = 12 * 1024;
 
-struct BackendRefreshContext {
-    bool force = false;
-    int requested_tick = 0;
-};
-
 struct BackendActionContext {
     std::string action;
     std::string params;
@@ -926,6 +921,21 @@ void AppShell::Initialize(Display* display) {
     // Wi-Fi may not be ready during Initialize. Keep one coalesced context
     // update pending; Tick() sends it as soon as backend networking is safe.
     page_context_pending_.store(true);
+    if (xTaskCreateWithCaps(BackendRefreshTask, "app_backend", 12288, nullptr, 2,
+                            &backend_refresh_task_handle_, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
+        backend_refresh_task_handle_ = nullptr;
+        ESP_LOGE(TAG, "Failed to create persistent backend refresh task");
+    }
+    if (xTaskCreateWithCaps(BackendEventTask, "app_events", 4096, nullptr, 1,
+                            &backend_event_task_handle_, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
+        backend_event_task_handle_ = nullptr;
+        ESP_LOGE(TAG, "Failed to create persistent backend event task");
+    }
+    if (xTaskCreateWithCaps(PageContextTask, "app_context", 4096, nullptr, 2,
+                            &page_context_task_handle_, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
+        page_context_task_handle_ = nullptr;
+        ESP_LOGE(TAG, "Failed to create persistent page context task");
+    }
 }
 
 void AppShell::ShowHome() { SetPage(Page::kHome); }
@@ -3042,12 +3052,13 @@ void AppShell::StartPageContextTask() {
         return;
     }
     page_context_pending_.store(false);
-    if (xTaskCreateWithCaps(PageContextTask, "app_context", 4096, nullptr, 2, nullptr,
-                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
+    if (page_context_task_handle_ == nullptr) {
         page_context_running_.store(false);
         page_context_pending_.store(true);
-        ESP_LOGW(TAG, "Failed to create page context task");
+        ESP_LOGW(TAG, "Persistent page context task is unavailable");
+        return;
     }
+    xTaskNotifyGive(page_context_task_handle_);
 }
 
 void AppShell::StartBackendRefresh(bool force) {
@@ -3077,13 +3088,14 @@ void AppShell::StartBackendRefresh(bool force) {
         return;
     }
     last_backend_refresh_tick_ = tick_count_;
-    auto* context = new BackendRefreshContext{force, tick_count_};
-    if (xTaskCreateWithCaps(BackendRefreshTask, "app_backend", 12288, context, 2, nullptr,
-                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
-        delete context;
+    backend_refresh_force_.store(force);
+    backend_refresh_requested_tick_.store(tick_count_);
+    if (backend_refresh_task_handle_ == nullptr) {
         backend_refreshing_.store(false);
-        ESP_LOGE(TAG, "Failed to create backend refresh task");
+        ESP_LOGE(TAG, "Persistent backend refresh task is unavailable");
+        return;
     }
+    xTaskNotifyGive(backend_refresh_task_handle_);
 }
 
 void AppShell::StartBackendEventTask() {
@@ -3103,29 +3115,29 @@ void AppShell::StartBackendEventTask() {
     if (backend_events_running_.exchange(true)) {
         return;
     }
-    if (xTaskCreateWithCaps(BackendEventTask, "app_events", 4096, nullptr, 1, nullptr,
-                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
+    if (backend_event_task_handle_ == nullptr) {
         backend_events_running_.store(false);
-        ESP_LOGE(TAG, "Failed to create backend event task");
+        ESP_LOGE(TAG, "Persistent backend event task is unavailable");
+        return;
     }
+    xTaskNotifyGive(backend_event_task_handle_);
 }
 
 void AppShell::BackendRefreshTask(void* arg) {
-    auto* context = static_cast<BackendRefreshContext*>(arg);
-    const bool force = context != nullptr && context->force;
-    const int requested_tick = context != nullptr ? context->requested_tick : 0;
-    delete context;
-
     auto& shell = AppShell::GetInstance();
-    if (!shell.CanRunBackgroundNetworkTasks()) {
-        Application::GetInstance().Schedule([requested_tick]() {
-            auto& shell = AppShell::GetInstance();
-            shell.backend_refreshing_.store(false);
-            shell.last_backend_refresh_tick_ = requested_tick - kBackendRefreshIntervalSec;
-        });
-        vTaskDeleteWithCaps(nullptr);
-        return;
-    }
+    while (true) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        const bool force = shell.backend_refresh_force_.exchange(false);
+        const int requested_tick = shell.backend_refresh_requested_tick_.load();
+        const size_t heap_before = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+        if (!shell.CanRunBackgroundNetworkTasks()) {
+            Application::GetInstance().Schedule([requested_tick]() {
+                auto& shell = AppShell::GetInstance();
+                shell.backend_refreshing_.store(false);
+                shell.last_backend_refresh_tick_ = requested_tick - kBackendRefreshIntervalSec;
+            });
+            continue;
+        }
     AppBackendSnapshot snapshot;
     AppBackendClient::GetInstance().FetchSummary(snapshot);
     std::string refresh_status = snapshot.online ? "刷新成功" : ("刷新失败 " + snapshot.last_error);
@@ -3175,6 +3187,10 @@ void AppShell::BackendRefreshTask(void* arg) {
     } else {
         AppSyncQueue::GetInstance().AddEvent("backend.refresh.failed", MakeErrorPayload(snapshot.last_error));
     }
+    const size_t heap_after = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    ESP_LOGI(TAG, "Backend refresh heap delta: %d bytes (before=%u after=%u)",
+             static_cast<int>(heap_after) - static_cast<int>(heap_before),
+             static_cast<unsigned>(heap_before), static_cast<unsigned>(heap_after));
     Application::GetInstance().Schedule([snapshot, refresh_status, resource_status, heartbeat_status,
                                          remote_checked, heartbeat_posted, remote_tick, resource_tick,
                                          heartbeat_tick, requested_tick, force]() {
@@ -3203,11 +3219,13 @@ void AppShell::BackendRefreshTask(void* arg) {
         shell.OnBackendSnapshot(snapshot);
         shell.DispatchQueuedBackendAction();
     });
-    vTaskDeleteWithCaps(nullptr);
+    }
 }
 
 void AppShell::BackendEventTask(void*) {
     auto& shell = AppShell::GetInstance();
+    while (true) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     if (shell.initialized_ && shell.CanRunBackendNetworkTasks()) {
         AppBackendEventState event_state;
         std::string error;
@@ -3273,7 +3291,7 @@ void AppShell::BackendEventTask(void*) {
         }
     }
     shell.backend_events_running_.store(false);
-    vTaskDeleteWithCaps(nullptr);
+    }
 }
 
 void AppShell::BackendActionTask(void* arg) {
@@ -3327,6 +3345,8 @@ void AppShell::BackendActionTask(void* arg) {
 
 void AppShell::PageContextTask(void*) {
     auto& shell = AppShell::GetInstance();
+    while (true) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     const std::string page = shell.CurrentPageKey();
     const std::string family_mode = shell.CurrentFamilyMode();
     const std::string page_state = shell.CurrentPageStateJson();
@@ -3349,7 +3369,7 @@ void AppShell::PageContextTask(void*) {
             shell.StartPageContextTask();
         }
     });
-    vTaskDeleteWithCaps(nullptr);
+    }
 }
 
 bool AppShell::IsAiActive() const {
@@ -3424,6 +3444,12 @@ std::string AppShell::BuildDeviceHeartbeatData() const {
     constexpr uint32_t kInternalCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
     cJSON_AddNumberToObject(root, "freeInternalSram", heap_caps_get_free_size(kInternalCaps));
     cJSON_AddNumberToObject(root, "minimumFreeInternalSram", heap_caps_get_minimum_free_size(kInternalCaps));
+    cJSON* voice_metrics = cJSON_Parse(Application::GetInstance().GetVoiceTurnMetricsJson().c_str());
+    if (cJSON_IsObject(voice_metrics)) {
+        cJSON_AddItemToObject(root, "voiceTurnMetrics", voice_metrics);
+    } else if (voice_metrics != nullptr) {
+        cJSON_Delete(voice_metrics);
+    }
     cJSON_AddStringToObject(root, "backendRefresh", last_backend_refresh_status_.c_str());
     cJSON_AddStringToObject(root, "backendProbe", last_backend_event_status_.c_str());
     cJSON_AddStringToObject(root, "backendAction", last_backend_action_status_.c_str());

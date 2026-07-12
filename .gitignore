@@ -2,6 +2,8 @@ tmp/
 components/
 managed_components/
 build/
+!server/voice-provider/build/
+!server/voice-provider/build/apply_page_router.py
 dist/
 .pio/
 .tools/

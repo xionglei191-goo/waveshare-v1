@@ -119,7 +119,7 @@ function requestUrl(base, params) {
 
 async function fetchJson(url, timeoutMs, fetchImpl = fetch) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 6000));
+  const timeout = setTimeout(() => controller.abort(), Math.max(100, Number(timeoutMs) || 6000));
   try {
     const response = await fetchImpl(url, {
       headers: { Accept: "application/json", "User-Agent": "xiaozhi-family-hub/0.2" },

@@ -291,11 +291,12 @@ function planDevice(input) {
 }
 
 function planWeather(input) {
+  const forceRefresh = includesAny(normalizedUtterance(input), ["刷新天气", "更新天气", "刷新一下", "更新一下", "refresh weather"]);
   return {
     intent: "weather.today",
     confidence: 0.9,
     tool: "family.weather.today",
-    args: {},
+    args: { forceRefresh },
     speech: "我看一下今天的天气。",
     display: { page: "weather", toast: "今日天气" }
   };

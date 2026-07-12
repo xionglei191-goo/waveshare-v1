@@ -846,8 +846,11 @@ function createApiRouter(store, config, eventBus = null, observability = null) {
           requestId: recentDeviceLog?.requestId || recentDeviceData.requestId || recentDeviceData.request_id || null,
           recentMemory: recentDeviceLog?.memory || recentDeviceLog?.heap || {
             freeHeap: recentDeviceData.freeHeap ?? null,
-            minimumFreeHeap: recentDeviceData.minimumFreeHeap ?? null
+            minimumFreeHeap: recentDeviceData.minimumFreeHeap ?? null,
+            freeInternalSram: recentDeviceData.freeInternalSram ?? null,
+            minimumFreeInternalSram: recentDeviceData.minimumFreeInternalSram ?? null
           },
+          voiceTurnMetrics: recentDeviceData.voiceTurnMetrics || recentDeviceLog?.voiceTurnMetrics || null,
           wakeReason: recentDeviceLog?.wakeReason || recentDeviceData.wakeReason || null,
           backendProbe: recentDeviceLog?.backendProbe || recentDeviceData.backendProbe || null,
           backendRefresh: recentDeviceData.backendRefresh || null,

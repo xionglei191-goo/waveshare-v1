@@ -88,7 +88,39 @@ void Application::Initialize() {
         xEventGroupSetBits(event_group_, MAIN_EVENT_WAKE_WORD_DETECTED);
     };
     callbacks.on_vad_change = [this](bool speaking) {
+        if (!speaking && GetDeviceState() == kDeviceStateListening) {
+            voice_listen_stop_us_.store(esp_timer_get_time());
+            voice_tts_start_us_.store(0);
+            voice_pending_tts_start_us_.store(0);
+            voice_first_packet_us_.store(0);
+            voice_first_pcm_us_.store(0);
+            voice_dropped_packets_.store(0);
+            voice_dropped_first_packets_.store(0);
+            voice_send_failures_.store(0);
+        }
         xEventGroupSetBits(event_group_, MAIN_EVENT_VAD_CHANGE);
+    };
+    callbacks.on_first_playback_pcm = [this]() {
+        const int64_t first_pcm = esp_timer_get_time();
+        voice_first_pcm_us_.store(first_pcm);
+        const int64_t listen_stop = voice_listen_stop_us_.load();
+        const int64_t tts_start = voice_tts_start_us_.load();
+        const int64_t first_packet = voice_first_packet_us_.load();
+        auto elapsed_ms = [](int64_t start, int64_t end) -> int32_t {
+            return start > 0 && end >= start ? static_cast<int32_t>((end - start) / 1000) : -1;
+        };
+        voice_completed_listen_to_tts_ms_.store(elapsed_ms(listen_stop, tts_start));
+        voice_completed_tts_to_packet_ms_.store(elapsed_ms(tts_start, first_packet));
+        voice_completed_packet_to_pcm_ms_.store(elapsed_ms(first_packet, first_pcm));
+        voice_completed_listen_to_pcm_ms_.store(elapsed_ms(listen_stop, first_pcm));
+        const AudioQueueMetrics queues = audio_service_.GetAndResetVoiceQueueMetrics();
+        voice_completed_encode_peak_.store(queues.encode_peak);
+        voice_completed_send_peak_.store(queues.send_peak);
+        voice_completed_decode_peak_.store(queues.decode_peak);
+        voice_completed_playback_peak_.store(queues.playback_peak);
+        voice_completed_dropped_packets_.store(voice_dropped_packets_.load());
+        voice_completed_dropped_first_packets_.store(voice_dropped_first_packets_.load());
+        voice_completed_send_failures_.store(voice_send_failures_.load());
     };
     audio_service_.SetCallbacks(callbacks);
 
@@ -232,6 +264,7 @@ void Application::Run() {
         if (bits & MAIN_EVENT_SEND_AUDIO) {
             while (auto packet = audio_service_.PopPacketFromSendQueue()) {
                 if (protocol_ && !protocol_->SendAudio(std::move(packet))) {
+                    voice_send_failures_.fetch_add(1);
                     break;
                 }
             }
@@ -524,8 +557,23 @@ void Application::InitializeProtocol() {
     });
     
     protocol_->OnIncomingAudio([this](std::unique_ptr<AudioStreamPacket> packet) {
-        if (GetDeviceState() == kDeviceStateSpeaking) {
-            audio_service_.PushPacketToDecodeQueue(std::move(packet));
+        if (GetDeviceState() == kDeviceStateSpeaking || voice_playback_ready_.load()) {
+            if (voice_first_packet_pending_.exchange(false)) {
+                voice_tts_start_us_.store(voice_pending_tts_start_us_.load());
+                voice_first_packet_us_.store(esp_timer_get_time());
+                voice_free_heap_at_first_packet_.store(SystemInfo::GetFreeHeapSize());
+                constexpr uint32_t kInternalCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+                voice_free_internal_at_first_packet_.store(heap_caps_get_free_size(kInternalCaps));
+                voice_min_internal_at_first_packet_.store(heap_caps_get_minimum_free_size(kInternalCaps));
+            }
+            if (!audio_service_.PushPacketToDecodeQueue(std::move(packet))) {
+                voice_dropped_packets_.fetch_add(1);
+            }
+        } else {
+            if (voice_tts_start_us_.load() > 0 && voice_first_packet_us_.load() == 0) {
+                voice_dropped_first_packets_.fetch_add(1);
+            }
+            voice_dropped_packets_.fetch_add(1);
         }
     });
     
@@ -553,6 +601,10 @@ void Application::InitializeProtocol() {
         if (strcmp(type->valuestring, "tts") == 0) {
             auto state = cJSON_GetObjectItem(root, "state");
             if (strcmp(state->valuestring, "start") == 0) {
+                voice_pending_tts_start_us_.store(esp_timer_get_time());
+                voice_first_packet_pending_.store(true);
+                voice_playback_ready_.store(true);
+                audio_service_.PrepareVoicePlayback();
                 Schedule([this]() {
                     aborted_ = false;
                     SetDeviceState(kDeviceStateSpeaking);
@@ -1025,10 +1077,42 @@ void Application::HandleStopListeningEvent() {
         return;
     } else if (state == kDeviceStateListening) {
         if (protocol_) {
+            voice_listen_stop_us_.store(esp_timer_get_time());
+            voice_tts_start_us_.store(0);
+            voice_first_packet_us_.store(0);
+            voice_first_pcm_us_.store(0);
+            voice_dropped_packets_.store(0);
+            voice_dropped_first_packets_.store(0);
+            voice_send_failures_.store(0);
             protocol_->SendStopListening();
         }
         SetDeviceState(kDeviceStateIdle);
     }
+}
+
+std::string Application::GetVoiceTurnMetricsJson() {
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "listenStopToTtsStartMs", voice_completed_listen_to_tts_ms_.load());
+    cJSON_AddNumberToObject(root, "ttsStartToFirstPacketMs", voice_completed_tts_to_packet_ms_.load());
+    cJSON_AddNumberToObject(root, "firstPacketToPcmMs", voice_completed_packet_to_pcm_ms_.load());
+    cJSON_AddNumberToObject(root, "listenStopToFirstPcmMs", voice_completed_listen_to_pcm_ms_.load());
+    cJSON_AddNumberToObject(root, "encodeQueuePeak", voice_completed_encode_peak_.load());
+    cJSON_AddNumberToObject(root, "sendQueuePeak", voice_completed_send_peak_.load());
+    cJSON_AddNumberToObject(root, "decodeQueuePeak", voice_completed_decode_peak_.load());
+    cJSON_AddNumberToObject(root, "playbackQueuePeak", voice_completed_playback_peak_.load());
+    cJSON_AddNumberToObject(root, "droppedDecodePackets", voice_completed_dropped_packets_.load());
+    cJSON_AddNumberToObject(root, "droppedFirstPackets", voice_completed_dropped_first_packets_.load());
+    cJSON_AddNumberToObject(root, "websocketSendFailures", voice_completed_send_failures_.load());
+    cJSON_AddNumberToObject(root, "freeHeapAtFirstPacket", voice_free_heap_at_first_packet_.load());
+    cJSON_AddNumberToObject(root, "freeInternalSramAtFirstPacket", voice_free_internal_at_first_packet_.load());
+    cJSON_AddNumberToObject(root, "minimumFreeInternalSramAtFirstPacket", voice_min_internal_at_first_packet_.load());
+    char* printed = cJSON_PrintUnformatted(root);
+    std::string result = printed != nullptr ? printed : "{}";
+    if (printed != nullptr) {
+        cJSON_free(printed);
+    }
+    cJSON_Delete(root);
+    return result;
 }
 
 void Application::HandleWakeWordDetectedEvent() {
@@ -1064,7 +1148,9 @@ void Application::HandleWakeWordDetectedEvent() {
 
         if (state == kDeviceStateListening) {
             protocol_->SendStartListening(GetDefaultListeningMode());
-            audio_service_.ResetDecoder();
+            if (!voice_playback_ready_.exchange(false)) {
+                audio_service_.ResetDecoder();
+            }
             audio_service_.PlaySound(Lang::Sounds::OGG_POPUP);
             // Re-enable wake word detection as it was stopped by the detection itself
             audio_service_.EnableWakeWordDetection(true);

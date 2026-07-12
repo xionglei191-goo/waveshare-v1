@@ -11,6 +11,7 @@
 #include <deque>
 #include <memory>
 #include <functional>
+#include <atomic>
 
 #include "protocol.h"
 #include "ota.h"
@@ -116,6 +117,7 @@ public:
     AecMode GetAecMode() const { return aec_mode_; }
     void PlaySound(const std::string_view& sound);
     AudioService& GetAudioService() { return audio_service_; }
+    std::string GetVoiceTurnMetricsJson();
     
     /**
      * Reset protocol resources (thread-safe)
@@ -149,6 +151,30 @@ private:
     bool using_official_voice_provider_ = false;
     bool failover_attempted_for_connection_ = false;
     bool voice_memory_monitor_active_ = false;
+    std::atomic<bool> voice_playback_ready_{false};
+    std::atomic<bool> voice_first_packet_pending_{false};
+    std::atomic<int64_t> voice_listen_stop_us_{0};
+    std::atomic<int64_t> voice_tts_start_us_{0};
+    std::atomic<int64_t> voice_pending_tts_start_us_{0};
+    std::atomic<int64_t> voice_first_packet_us_{0};
+    std::atomic<int64_t> voice_first_pcm_us_{0};
+    std::atomic<uint32_t> voice_dropped_packets_{0};
+    std::atomic<uint32_t> voice_dropped_first_packets_{0};
+    std::atomic<uint32_t> voice_send_failures_{0};
+    std::atomic<uint32_t> voice_free_heap_at_first_packet_{0};
+    std::atomic<uint32_t> voice_free_internal_at_first_packet_{0};
+    std::atomic<uint32_t> voice_min_internal_at_first_packet_{0};
+    std::atomic<int32_t> voice_completed_listen_to_tts_ms_{-1};
+    std::atomic<int32_t> voice_completed_tts_to_packet_ms_{-1};
+    std::atomic<int32_t> voice_completed_packet_to_pcm_ms_{-1};
+    std::atomic<int32_t> voice_completed_listen_to_pcm_ms_{-1};
+    std::atomic<uint32_t> voice_completed_encode_peak_{0};
+    std::atomic<uint32_t> voice_completed_send_peak_{0};
+    std::atomic<uint32_t> voice_completed_decode_peak_{0};
+    std::atomic<uint32_t> voice_completed_playback_peak_{0};
+    std::atomic<uint32_t> voice_completed_dropped_packets_{0};
+    std::atomic<uint32_t> voice_completed_dropped_first_packets_{0};
+    std::atomic<uint32_t> voice_completed_send_failures_{0};
     int64_t last_primary_voice_probe_us_ = 0;
     std::string primary_ota_url_;
     int clock_ticks_ = 0;

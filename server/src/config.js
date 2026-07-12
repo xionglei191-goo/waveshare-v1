@@ -95,6 +95,8 @@ function loadConfig(overrides = {}) {
     weatherLocationLabel: process.env.WEATHER_LOCATION_LABEL || "家",
     weatherTimeoutMs: numberFromEnv("WEATHER_TIMEOUT_MS", 6000),
     weatherRefreshIntervalMinutes: numberFromEnv("WEATHER_REFRESH_INTERVAL_MINUTES", 30),
+    weatherAgentCacheMaxAgeMs: numberFromEnv("WEATHER_AGENT_CACHE_MAX_AGE_MS", 35 * 60 * 1000),
+    weatherAgentRefreshTimeoutMs: numberFromEnv("WEATHER_AGENT_REFRESH_TIMEOUT_MS", 800),
     ...overrides
   };
 }

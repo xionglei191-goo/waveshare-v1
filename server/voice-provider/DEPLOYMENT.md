@@ -51,18 +51,23 @@ services:
   xiaozhi-esp32-server:
     build:
       context: ./voice-provider-build
-    image: xiaozhi-voice-provider:0.9.5-family-router2
+    image: xiaozhi-voice-provider:0.9.5-family-router5
     network_mode: host
     env_file:
       - ./.voice-provider.env
     environment:
       - FAMILY_BACKEND_URL=http://127.0.0.1:3100
+      - FAMILY_LIGHTWEIGHT_MODEL=deepseek-v4-flash
+      - FAMILY_COMPLEX_MODEL=deepseek-v4-pro
+      - FAMILY_LIGHTWEIGHT_DISABLE_THINKING=1
+      - FAMILY_LIGHTWEIGHT_MAX_TOKENS=160
+      - FAMILY_TTS_PREWARM=1
     volumes:
       - ./data:/opt/xiaozhi-esp32-server/data
       - ./plugins_func/functions/family_agent_ask.py:/opt/xiaozhi-esp32-server/plugins_func/functions/family_agent_ask.py:ro
 ```
 
-host 网络使容器能够访问同机的 Family_Backend 和 Sub2API。派生镜像固定到上游摘要 `sha256:3aab4836f012f59145926ac023a45857f6a87e9b6089eea7ffa277faafcfe887`，构建时校验 `intentHandler.py` 和 `connection.py`，基线变化会直接失败。`router2` 同时把连接日志收紧为只记录请求头名称，禁止记录 Authorization、WebSocket nonce 等请求头值。
+host 网络使容器能够访问同机的 Family_Backend。派生镜像固定到上游摘要 `sha256:3aab4836f012f59145926ac023a45857f6a87e9b6089eea7ffa277faafcfe887`，构建时对路由、LLM、ASR、TTS 和监听入口逐文件校验 SHA，基线变化会直接失败。`router5` 只记录请求头名称，轻量模型关闭隐藏推理，Family Hub 明确未处理时跳过工具 schema，并在录音阶段预热 TTS 连接。
 
 ### 语音与设备配置
 
