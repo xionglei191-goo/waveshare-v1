@@ -43,10 +43,11 @@ idf.py -p /dev/cu.usbmodem101 flash
 - BluFi and AFSK provisioning logs redact Wi-Fi passwords.
 - Firmware now has a low-frequency `appshell.heartbeat` path to `/api/device/logs`; it reports UUID, logical device id, page, AI/backend state, wake/reset, heap, SSID/IP/RSSI/channel and device status when backend refresh is online and the device is not busy.
 - Firmware now reports a dedicated `appshell.wifi_provisioned` device log after a successful AppShell BluFi provisioning flow. Readiness requires this event plus a recent heartbeat; acceptance still requires real phone-side proof.
+- Speaker volume is forced to 100 on every boot (2026-07-12). `AudioCodec::Start()` now sets `output_volume_ = 100` and writes it back to NVS, ignoring any stored value. Reason: the only volume input is the device MCP tool `self.audio_speaker.set_volume`, but the current LLM (`glm-4-flashx-250414`) frequently *claims* to set volume without actually emitting the function_call (hallucinated success — verified in logs: no `发送客户端mcp工具调用请求: self.audio_speaker.set_volume` line, device kept reporting volume 70), and there is no on-screen volume control. Changing only the `output_volume_ = 70` default was insufficient because `Start()` reads the NVS-stored value first and the device already had 70 persisted. Side effect: volume always resets to 100 at boot and cannot be persistently lowered until a real volume control path exists. Files: `main/audio/audio_codec.cc` (`Start()`), `main/audio/audio_codec.h` (default). See decision-log 2026-07-12.
 
 ## Backend State
 
-- P9 AI runtime is deployed: device page context push/cache, trace/session propagation, deterministic Page Agent boundary, lightweight `deepseek-v4-flash` fallback, complex `deepseek-v4-pro` fallback, command idempotency, sanitized trace storage and admin trace diagnostics.
+- P9 AI runtime is deployed: device page context push/cache, trace/session propagation, deterministic Page Agent boundary, command idempotency, sanitized trace storage and admin trace diagnostics. (Active LLM/ASR models are now Zhipu GLM + iFlytek — see "Voice Pipeline Configuration" snapshot below; the earlier `deepseek-v4-*` model names are retired fallbacks.)
 - Family-memory CRUD now requires admin authorization. Memory supports member scope, visibility, source, expiry and per-member enable policy; Provider remains `nomem`, and conversation text is not persisted by default.
 
 - Backend directory: `server/`.
@@ -100,6 +101,77 @@ idf.py -p /dev/cu.usbmodem101 flash
 - Xiaomi/XiaoAi speaker control (2026-07-09): Tools Agent exposes `family.speaker.command` (send a text directive so XiaoAi's own assistant executes it), `family.speaker.say` (TTS), `family.speaker.volume`, `family.speaker.play`, `family.speaker.pause`. They run through the existing Home Assistant service call path (`runHomeAssistantService`) and stay simulated until `HOME_ASSISTANT_URL`/`HOME_ASSISTANT_TOKEN` and `XIAOMI_SPEAKER_ENTITY` are configured. `speaker.*` is categorized as `homeControl` policy (parent/member, 默认 mode). The say/command service is configurable via `XIAOMI_SPEAKER_SERVICE` (default `xiaomi_miot.intelligent_speaker`).
 - Xiaozhi MCP bridge (2026-07-09) now exposes explicit `family.speaker.say`, `family.speaker.command` and `family.speaker.volume` tools (routed to `/api/agent/tools/*`), so Xiaozhi can control the speaker directly instead of only via `family.agent.ask`. The MCP-invoked path uses role empty + source `xiaozhi.mcp`, so it obeys user-mode policy: `homeControl` (and thus speaker control) is allowed in 默认 mode but denied in 儿童/访客 unless parent. Switch to 默认 mode to let Xiaozhi drive the speaker.
 - VERIFIED on real hardware 2026-07-09: `family.speaker.say` and `family.speaker.command` both returned HA http 200 and the physical 小米AI音箱(第二代) audibly spoke. Live config: `XIAOMI_SPEAKER_ENTITY=media_player.xiaomi_l15a_654a_play_control` (model `xiaomi.wifispeaker.l15a`), service `xiaomi_miot.intelligent_speaker` with `{entity_id, text, execute}` (execute=false → TTS, true → run as XiaoAi directive).
+
+## Voice Pipeline Configuration (Live Snapshot, 2026-07-12)
+
+This is the authoritative snapshot of the running voice stack on host `192.168.31.246`. Secrets are never written here — see the "secret locations" line for where each key lives. Config file inside the container: `/opt/xiaozhi-esp32-server/data/.config.yaml`, host-mounted at `/home/xionglei/xiaozhi-esp32-server/main/xiaozhi-server/data/.config.yaml`. Always edit the host-mounted file (container-only edits are lost on `docker compose` recreate).
+
+### `selected_module` (active providers)
+
+| Module | Active provider | Notes |
+|--------|-----------------|-------|
+| VAD | `SileroVAD` | `threshold=0.5`, `threshold_low=0.2`, `min_silence_duration_ms=700` |
+| ASR | `XunfeiStreamASR` | iFlytek streaming `iat`, `type: xunfei_stream` |
+| LLM | `GLMLLM` | Zhipu GLM, OpenAI-compatible |
+| VLLM | `ChatGLMVLLM` | vision (unchanged) |
+| TTS | `XunFeiTTS` | iFlytek 超拟人合成 (`type: xunfei_stream`), voice `x5_lingxiaoxuan_flow`; `AliBLTTS` kept inactive as fallback |
+| Memory | `nomem` | conversation text not persisted |
+| Intent | `function_call` | inline tool selection, no separate intent LLM hop |
+
+### ASR — iFlytek streaming (primary)
+
+- Provider `XunfeiStreamASR`, `type: xunfei_stream`, endpoint `iat.cn-huabei-1.xf-yun.com` (v1 `iat`).
+- Fields: `app_id=1484e00f`, `api_key`/`api_secret` (secrets, not shown).
+- Fallback provider kept in config but inactive: `AliyunBLStreamASR` (`paraformer-realtime-v2`).
+- Why iFlytek: Aliyun streaming ASR dropped the start of an utterance after a pause / after idle (re-opening the stream lost the leading words); iFlytek recognizes full sentences reliably. A prior `11201 licc failed` was an iFlytek console authorization/quota issue, resolved account-side (not a config bug).
+
+### TTS — iFlytek super-realistic (primary)
+
+- Provider `XunFeiTTS`, `type: xunfei_stream`, endpoint `cbm01.cn-huabei-1.xf-yun.com` (讯飞「超拟人合成」/uts private WebSocket).
+- Fields: `app_id=1484e00f` (same APPID as ASR — iFlytek credentials are per-APPID), `api_key`/`api_secret` (secrets, not shown), `voice=x5_lingxiaoxuan_flow`, `output_dir=tmp/`.
+- Fallback provider kept in config but inactive: `AliBLTTS` (Aliyun cosyvoice `cosyvoice-v2`, voice `longcheng_v2`).
+- Note: the server's only iFlytek TTS provider (`xunfei_stream`) is hardwired to the「超拟人合成」endpoint. The「在线语音合成(流式版)」`wss://tts-api.xfyun.cn/v2/tts` API is a different, unsupported provider — using it would require writing a new TTS provider. The 超拟人 service must be enabled + in-quota for the APPID (https://console.xfyun.cn/services/uts) or first synthesis fails authorization (same lesson as ASR 11201).
+
+### LLM — Zhipu GLM direct (primary)
+
+- Provider `GLMLLM`, `type: openai`, `base_url: https://open.bigmodel.cn/api/paas/v4`.
+- Model **`glm-4-flashx-250414`** for both tiers (measured TTFT 0.44s, function_call confirmed).
+- `temperature=0.7`, `max_tokens=500`, `timeout: connect=5 write=5 read=40 pool=2`.
+- Do NOT use `glm-4-flash` (does not trigger function_call — fabricates tool answers) or `glm-4.7-flash` (reasoning model, long `reasoning_content` before speech — unusable for voice).
+- Inactive fallbacks kept in config: `DeepSeekLLM` (`deepseek-v4-flash`, `api.deepseek.com`), `Sub2ApiLLM` (`gpt-5.5` via local `127.0.0.1:8080` gateway — historical, slow 20–36s, avoid).
+- Per-request model override: device chat uses `conn.family_model_name` (injected in `core/connection.py`), which OVERRIDES `.config.yaml`. Three sources must agree on the model name (see below) or device chat 400s.
+
+### Model-name sources (all three must match `glm-4-flashx-250414`)
+
+1. Family Hub systemd drop-in `/etc/systemd/system/xiaozhi-family-hub.service.d/60-ai-models.conf`: `AI_LIGHTWEIGHT_MODEL`, `AI_COMPLEX_MODEL` (primary path — backend returns `modelName` to router).
+2. Voice-provider `docker-compose.family.yml`: `FAMILY_LIGHTWEIGHT_MODEL`, `FAMILY_COMPLEX_MODEL` (fallback path when backend times out).
+3. Voice-provider `.config.yaml` `selected_module.LLM = GLMLLM` (endpoint source for the per-request name).
+
+### Router / timeouts
+
+- `FAMILY_BACKEND_URL=http://192.168.31.246:3100`, `FAMILY_PAGE_ROUTER_ENABLED=1`.
+- `FAMILY_BACKEND_TIMEOUT_MS=5000` (was 2000; a cold weather lookup ~2.4s tripped the old value and fell back to LLM chit-chat instead of returning real data).
+- Image pinned: `xiaozhi-voice-provider:0.9.5-family-router5`.
+
+### Secret locations (never inline in docs)
+
+- iFlytek ASR + iFlytek TTS + Zhipu LLM keys: inside `.config.yaml` (chmod 600, root).
+- Model-name env: systemd drop-in `60-ai-models.conf` and `docker-compose.family.yml`.
+
+### Config backups on host (chronological)
+
+`.config.yaml.bak-deepseek-20260711-225213`, `.config.yaml.bak-glm-20260712-181210`, `.config.yaml.bak-xunfei-20260712-131309`, `.config.yaml.bak-vad-20260712-185126`, `docker-compose.family.yml.bak-deepseek-20260711-230939`.
+
+### Restart to apply
+
+```sh
+# host-mounted config edit, then:
+docker restart xiaozhi-voice-provider           # picks up .config.yaml
+# env (model names / router) changes need recreate:
+cd /home/xionglei/xiaozhi-esp32-server/main/xiaozhi-server && docker compose -f docker-compose.family.yml up -d
+# Family Hub model env:
+sudo systemctl daemon-reload && sudo systemctl restart xiaozhi-family-hub
+```
 
 ## Home Assistant Deployment
 

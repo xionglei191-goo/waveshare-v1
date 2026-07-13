@@ -33,6 +33,15 @@ void AudioCodec::Start() {
         ESP_LOGW(TAG, "Output volume value (%d) is too small, setting to default (10)", output_volume_);
         output_volume_ = 10;
     }
+    // 强制开机音量拉满：设备当前没有可靠的音量调节入口（GLM 常幻觉、屏幕无控件），
+    // 而 NVS 里可能残留旧的低音量值会盖过默认值。这里无视残留值，开机统一设为 100
+    // 并写回 NVS，保证声音够大。以后若接入可靠的音量控制入口，可移除此强制逻辑。
+    if (output_volume_ < 100) {
+        output_volume_ = 100;
+        Settings write_settings("audio", true);
+        write_settings.SetInt("output_volume", output_volume_);
+        ESP_LOGI(TAG, "Forced output volume to 100 at startup");
+    }
 
     ESP_LOGI(TAG, "Audio codec started");
 }
